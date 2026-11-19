@@ -2,12 +2,12 @@
 
 ## Goal
 
-把 native 引擎库从 `engine/src/main/jniLibs` 迁移到 `app/src/main/nativeplugins` 后，确保 Debug/Release 都能稳定启动 KRKR、ONS、Artemis，并避免 R8 混淆破坏 JNI/反射入口。
+After migrating the native engine libraries from `engine/src/main/jniLibs` to `app/src/main/nativeplugins`, ensure that both Debug and Release builds can reliably launch KRKR, ONS, and Artemis, and prevent R8 obfuscation from breaking JNI/reflection entry points.
 
 ## Checklist
 
-- [x] 启动游戏前同步确保对应 native 插件已安装且完整。
-- [x] 插件安装逻辑不只依赖 SharedPreferences 标记，必须校验 `current/arm64-v8a` 下的必备 `.so` 与 manifest。
-- [x] `KR2Activity` 的默认 native 加载路径改为插件加载兜底，避免未来误用时加载已删除的 `jniLibs`。
-- [x] 补齐 release R8/ProGuard keep 规则，覆盖 JNI、SDL、KRKR、ONS、Artemis、IJK、hook stub 相关包。
-- [x] 运行 `assembleDebug` 和 `assembleRelease` 验证。
+- [x] Before launching a game, synchronously ensure that the corresponding native plugin is installed and complete.
+- [x] The plugin installation logic must not rely solely on SharedPreferences markers; it must verify the required `.so` files and the manifest under `current/arm64-v8a`.
+- [x] The default native loading path in `KR2Activity` was changed to the plugin loading fallback, preventing accidental loading of the removed `jniLibs` in the future.
+- [x] Completed the release R8/ProGuard keep rules, covering the packages related to JNI, SDL, KRKR, ONS, Artemis, IJK, and the hook stub.
+- [x] Ran `assembleDebug` and `assembleRelease` for verification.

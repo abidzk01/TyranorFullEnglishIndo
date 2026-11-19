@@ -1,571 +1,592 @@
-# Tyranor Next — AGENT 规范
+# Tyranor Next — AGENT Rules
 
-本文档是 AI Agent 在本项目内开发时必须遵循的统一规范。新增或修改代码前请先阅读，与既有实现保持一致。
+This document is the unified rulebook that AI Agents must follow when developing in this project. Read it before adding or modifying code, and stay consistent with the existing implementation.
 
-> 领域术语：项目核心概念（引擎/游戏库/设置/封面/存档/界面规范等）的权威定义见 `CONTEXT.md`（仓库根目录）。开发与代码评审时若涉及上述领域词汇，以 `CONTEXT.md` 中的术语与 `_Avoid_` 意见为准，避免引入异名同义的新词。
+> Domain terminology: the authoritative definitions of the project's core concepts (engine / game library / settings / cover / save / UI conventions, etc.) are in `CONTEXT.md` (repository root). When development or code review touches those domain terms, follow the terminology and the `_Avoid_` notes in `CONTEXT.md`, and avoid introducing synonyms.
 
-## 文档工作流 Skills（docs/skills）
+## Documentation Workflow Skills (docs/skills)
 
-项目内置三类文档工作流 skill（与全局用户级 skill 同名，以本仓库版本为准），用于打磨设计与沉淀领域知识：
+The project bundles three documentation workflow skills (named the same as the global user-level skills; the repository version is authoritative) for polishing designs and accumulating domain knowledge:
 
-| Skill | 位置 | 用途 |
+| Skill | Location | Purpose |
 | --- | --- | --- |
-| grilling | `docs/skills/grilling/SKILL.md` | 对计划/决策/想法进行逐轮质询，以「设计树 + 轮次」方式收敛到共享理解 |
-| grill-with-docs | `docs/skills/grill-with-docs/SKILL.md` | grilling 之上叠加文档产出：质询过程中同步落 ADR 与术语表 |
-| domain-modeling | `docs/skills/domain-modeling/SKILL.md` | 构建/打磨项目领域模型：维护 `CONTEXT.md` 术语表、撰写 ADR（格式见 `docs/skills/domain-modeling/CONTEXT-FORMAT.md` 与 `ADR-FORMAT.md`） |
+| grilling | `docs/skills/grilling/SKILL.md` | Round-by-round interrogation of a plan/decision/idea, converging on a shared understanding via "design tree + rounds" |
+| grill-with-docs | `docs/skills/grill-with-docs/SKILL.md` | Documentation output layered on top of grilling: ADRs and glossary entries are produced during the interrogation |
+| domain-modeling | `docs/skills/domain-modeling/SKILL.md` | Build/polish the project domain model: maintain the `CONTEXT.md` glossary and write ADRs (formats in `docs/skills/domain-modeling/CONTEXT-FORMAT.md` and `ADR-FORMAT.md`) |
 
-约束：
+Constraints:
 
-- **质询纪律**：grilling 类流程仅在用户明确要求「打磨/质询/审方案」时启用；round 间必须等待用户回答，不得自行代答或跳过 frontier。
-- **领域模型维护**：任何术语或领域决策的变更，须同步更新仓库根 `CONTEXT.md`；`CONTEXT.md` 只收项目特有术语（通用编程概念不得入表），定义保持一至两句。
-- **ADR 三门槛**：只有当某决策同时满足「难逆转、无上下文费解、真实取舍」三点时，才创建 `docs/adr/` 下的 ADR 并引用对应 `ADR-FORMAT.md`；不满足则跳过，不强行沉淀。
-- **文档与实践一致**：术语表或 ADR 与代码冲突时，以代码为事实源当场指出差异，而不是静默改写文档。
+- **Interrogation discipline**: grilling-style flows are enabled only when the user explicitly asks to "polish / interrogate / review a plan"; between rounds you must wait for the user's answer and must not answer on their behalf or skip the frontier.
+- **Domain model maintenance**: any change to terminology or a domain decision must be reflected in the repository-root `CONTEXT.md`; `CONTEXT.md` only accepts project-specific terms (generic programming concepts must not be listed), and definitions stay at one to two sentences.
+- **Three ADR gates**: create an ADR under `docs/adr/` and cite the corresponding `ADR-FORMAT.md` only when a decision satisfies all three points — "hard to reverse, confusing without context, a real trade-off"; otherwise skip it rather than forcing it into a record.
+- **Documents match practice**: when the glossary or an ADR conflicts with the code, state the difference on the spot using the code as the source of truth, instead of silently rewriting the document.
 
-## 技术栈
+## Tech Stack
 
 - Android Jetpack Compose + Material 3
 
 - Kotlin
 
-- 底部导航结构：`app/src/main/java/com/tyranor/next/ui/main/MainScreen.kt`
+- Bottom navigation structure: `app/src/main/java/com/tyranor/next/ui/main/MainScreen.kt`
 
-- 页面按功能域归类到 `app/src/main/java/com/tyranor/next/ui/`
+- Pages are grouped by feature domain under `app/src/main/java/com/tyranor/next/ui/`
 
-- 应用业务能力按三层架构归类到 `app/src/main/java/com/tyranor/next/core/`
+- App business capabilities are grouped by the three-layer architecture under `app/src/main/java/com/tyranor/next/core/`
 
-## 三层架构目录规范
+## Three-Layer Architecture Directory Rules
 
-当前项目按职责划分为三层，依赖方向固定为：
+The project is split into three layers by responsibility, with a fixed dependency direction:
 
 ```
-界面 UI 交互层 -> 功能抽象层 -> 底层引擎层
+UI interaction layer -> feature abstraction layer -> engine foundation layer
 ```
 
-### 1. 底层引擎层
+### 1. Engine Foundation Layer
 
-- 目录：`engine/`
+- Directory: `engine/`
 
-- 职责：KRKR/Kirikiroid、krkrsdl3、ONS、Artemis、Tyrano、SDL/Cocos/IJK、Native/JNI、引擎宿主 Activity、引擎资源、Native 插件底层加载。
+- Responsibilities: KRKR/Kirikiroid, krkrsdl3, ONS, Artemis, Tyrano, SDL/Cocos/IJK, Native/JNI, engine host Activity, engine resources, Native plugin low-level loading.
 
-- 规则：不得依赖 `com.tyranor.next.ui.*`；不得关心 App 页面、Compose 状态或列表展示。
+- Rules: must not depend on `com.tyranor.next.ui.*`; must not care about App pages, Compose state, or list rendering.
 
-### 2. 功能抽象层
+### 2. Feature Abstraction Layer
 
-- 目录：`app/src/main/java/com/tyranor/next/core/`
+- Directory: `app/src/main/java/com/tyranor/next/core/`
 
-- 职责：游戏扫描、游戏模型、启动编排、封面抓取、存档管理、在线补丁、XP3 解包/封包、应用/引擎/单游戏配置、授权、后台更新。
+- Responsibilities: game scanning, game models, launch orchestration, cover scraping, save management, online patches, XP3 unpack/pack, app/engine/per-game configuration, authorization, background updates.
 
-- 规则：可以依赖 `engine` 模块；不得依赖 Compose（含 `androidx.compose.ui/foundation/material*` UI 组件，以及 `androidx.compose.runtime` 的状态原语与 `@Immutable` 注解）；不得把页面类作为普通业务依赖。
-  全局可观察状态一律用 `kotlinx.coroutines.flow`（`StateFlow`）或纯数据载荷（`ThemeColorPayload` 模式）由 UI 层 `collectAsState` 订阅。
+- Rules: may depend on the `engine` module; must not depend on Compose (including `androidx.compose.ui/foundation/material*` UI components, plus `androidx.compose.runtime` state primitives and the `@Immutable` annotation); must not treat page classes as ordinary business dependencies.
+  Globally observable state always uses `kotlinx.coroutines.flow` (`StateFlow`) or a plain data payload (the `ThemeColorPayload` pattern), subscribed via `collectAsState` in the UI layer.
 
-- 新增功能按域放入 `core/game`、`core/engine`、`core/cover`、`core/patch`、`core/unpack`、`core/settings`、`core/auth`、`core/updater` 等包。
+- New features go into the package matching their domain: `core/game`, `core/engine`, `core/cover`, `core/patch`, `core/unpack`, `core/settings`, `core/auth`, `core/updater`, etc.
 
-### 3. 界面 UI 交互层
+### 3. UI Interaction Layer
 
-- 目录：`app/src/main/java/com/tyranor/next/ui/`
+- Directory: `app/src/main/java/com/tyranor/next/ui/`
 
-- 职责：Compose 页面、Activity 壳、弹窗、导航、顶部栏、搜索框、用户输入、加载态与错误态。
+- Responsibilities: Compose pages, Activity shells, dialogs, navigation, top bars, search fields, user input, loading state, and error state.
 
-- 规则：只能调用功能抽象层；禁止直接 import `com.core`、`com.akira`、`com.yuri`、`org.tvp`、`org.libsdl`、`org.cocos2dx`、`bridge` 等底层引擎包。
+- Rules: may only call the feature abstraction layer; importing low-level engine packages such as `com.core`, `com.akira`, `com.yuri`, `org.tvp`, `org.libsdl`, `org.cocos2dx`, `bridge` directly is forbidden.
 
-- 页面按功能域放入 `ui/home`、`ui/game`、`ui/engine`、`ui/settings`、`ui/cover`、`ui/patch`、`ui/save`、`ui/archive`、`ui/auth`，公共组件放入 `ui/common`。
+- Pages go into `ui/home`, `ui/game`, `ui/engine`, `ui/settings`, `ui/cover`, `ui/patch`, `ui/save`, `ui/archive`, `ui/auth` by feature domain; shared components go into `ui/common`.
 
-### 4. 资源归属
+### 4. Resource Ownership
 
-- `engine/src/main/assets`：底层引擎运行资源与共享引擎脚本源头。
+- `engine/src/main/assets`: source of the engine runtime assets and shared engine scripts.
 
-- `app/src/main/assets/engine`：App 专属注入脚本；共享脚本由 Gradle 从 `engine/src/main/assets` 生成到 app assets。
+- `app/src/main/assets/engine`: app-only injection scripts; shared scripts are generated into app assets by Gradle from `engine/src/main/assets`.
 
-- `engine/src/main/nativeplugins`：共享 Native 插件 so 源头。
-- `app/src/main/nativeplugins`：插件 manifest 与 app-only 插件源头。
+- `engine/src/main/nativeplugins`: source of shared Native plugin `.so` files.
+- `app/src/main/nativeplugins`: plugin manifests and source of app-only plugins.
 
-- 禁止在 app 与 engine 两边手工维护同一份二进制或共享脚本；构建脚本会检查重复源文件。
+- Maintaining the same binary or shared script by hand on both the app and engine sides is forbidden; the build script checks for duplicate source files.
 
 ***
 
-## 错误处理协议（core → ui）
+## Error Handling Protocol (core → ui)
 
-功能抽象层（core）对 UI 的错误协议固定为以下三种，禁止再引入其它风格：
+The error protocol from the feature abstraction layer (core) to the UI is fixed to the following three styles; introducing any other style is forbidden:
 
-1. **类型化失败结果**：可预期的业务失败返回 sealed Result / 类型化错误 DTO，由 UI 映射文案。
-   现有模板：`LaunchResult`（`core/game/launch/LaunchResult.kt`）、`ExternalEngineLaunchResult`、
-   `UpdateCheckResult`、`CoverScraperService` 的 sealed 结果。
-2. **抛类型化异常**：确实需要异常语义时，异常必须携带错误码而非文案（如
-   `GameSaveException(SaveErrorCode, detail)`），UI 层按错误码映射 string 资源。
-3. **无结果即 null / 空集合**；调用方容错自行 `runCatching`（仅限边角工具函数）。
+1. **Typed failure results**: expected business failures return a sealed Result / typed error DTO, and the UI maps the text.
+   Existing templates: `LaunchResult` (`core/game/launch/LaunchResult.kt`), `ExternalEngineLaunchResult`,
+   `UpdateCheckResult`, and the sealed results of `CoverScraperService`.
+2. **Throw typed exceptions**: when exception semantics are genuinely needed, the exception must carry an error code rather than text (e.g.
+   `GameSaveException(SaveErrorCode, detail)`), and the UI layer maps the error code to a string resource.
+3. **No result means null / empty collection**; the caller handles errors with its own `runCatching` (limited to peripheral utility functions).
 
-硬性约束：
+Hard constraints:
 
-- **core 不得把本地化文案当错误消息/返回值**（禁止 `throw IOException(text(R.string...))`
-  或 `return text(R.string...)`）；需要提示时返回错误码，文案组装一律上移 UI
-  （映射文件放 `ui/<域>/` 或 `ui/common/`，如 `ui/common/LaunchErrorMessages.kt`）。
-- 新增错误分支时优先扩展已有 sealed 类型/错误码枚举，不新增并行协议。
-- 取消（`CancellationException`）不属于失败，必须原样向上传播。
+- **core must not use localized text as an error message/return value** (`throw IOException(text(R.string...))`
+  or `return text(R.string...)` are forbidden); when a message is needed, return an error code and move all text assembly up to the UI
+  (mapping files go in `ui/<domain>/` or `ui/common/`, e.g. `ui/common/LaunchErrorMessages.kt`).
+- When adding an error branch, prefer extending an existing sealed type / error-code enum rather than adding a parallel protocol.
+- Cancellation (`CancellationException`) is not a failure and must be propagated upward unchanged.
 
 ***
 
-## 页面顶部栏统一规范
+## Unified Page Top Bar Rules
 
-所有页面（首页 / 游戏 / 书库 / 设置）的顶部栏必须统一。**一律使用统一组件
-`com.tyranor.next.ui.common.AppTopBar`**，禁止任何页面手写该结构；占位页可复用
-`com.tyranor.next.ui.common.PlaceholderPage`（内部同样走 AppTopBar）。
+Top bars on all pages (Home / Games / Library / Settings) must be consistent. **Always use the shared component
+`com.tyranor.next.ui.common.AppTopBar`**; no page may hand-write that structure. Placeholder pages may reuse
+`com.tyranor.next.ui.common.PlaceholderPage` (which also goes through AppTopBar internally).
 
-### 0. 统一入口（AppTopBar）
+### 0. Single Entry Point (AppTopBar)
 
-- 页面顶部栏必须调用 `AppTopBar(title, ...)`；标题、结构、取色由组件兜底。
-- 参数约定：
-  - Material 页面（默认）：不传 `background`/`contentColor`，组件默认 `colorScheme.background` / `colorScheme.onBackground`。
-  - Miuix 风格页面（设置类 MiuixScaffold 的 `topBar` 槽）：传 `background = Color.Transparent`（顶部栏背景恒为透明，交由根部背景层——`MiuixTheme.colorScheme.background` 实为 `PageGrey`，传它会盖住玻璃/渐变根背景）、`contentColor = MiuixTheme.colorScheme.onBackground`，并设 `contentWindowInsets = WindowInsets(0.dp)`。
-  - 需要「色调切换」参与取色的页面：传 `background = PageGrey`、`contentColor = TextColor`。
-  - 右侧图标用 `trailing` 槽传入 `TopBarIcon`；标题下方的折叠内容（如游戏页搜索框）用 `underTitle` 槽。
-- 新页面/组件禁止再书写「背景层 + statusBarsPadding + 64dp + titleLarge Bold」结构。
+- A page top bar must call `AppTopBar(title, ...)`; the title, structure, and color selection are handled by the component.
+- Parameter conventions:
+  - Material pages (default): do not pass `background`/`contentColor`; the component defaults to `colorScheme.background` / `colorScheme.onBackground`.
+  - Miuix-style pages (`topBar` slot of a settings-style `MiuixScaffold`): pass `background = Color.Transparent` (the top bar background is always transparent and left to the root background layer — `MiuixTheme.colorScheme.background` is actually `PageGrey`, and passing it would cover the glass/gradient root background), `contentColor = MiuixTheme.colorScheme.onBackground`, and set `contentWindowInsets = WindowInsets(0.dp)`.
+  - Pages where "tone switching" participates in color selection: pass `background = PageGrey`, `contentColor = TextColor`.
+  - Right-side icons go into the `trailing` slot as `TopBarIcon`; collapsible content below the title (such as the search field on the games page) goes in the `underTitle` slot.
+- New pages/components must not write the "background layer + statusBarsPadding + 64dp + titleLarge Bold" structure again.
 
-### 1. 结构
+### 1. Structure
 
-- 顶部栏使用 **Column + Centre**，**不使用** Material3 的 `TopAppBar` / `Scaffold`。
+- The top bar uses **Column + Centre**, and does **not** use Material3's `TopAppBar` / `Scaffold`.
 
-- 页面整体由外层 `Column` 组装，顺序固定为：顶部栏 → 正文内容。
+- The page as a whole is assembled by an outer `Column`, with a fixed order: top bar → body content.
 
-- **禁止在顶部栏放置任何返回按钮/图标**。返回统一依赖系统返回键/手势（`Activity` 默认 `finish()`），不要通过 `onBack` 参数下发返回回调。
+- **Placing any back button/icon in the top bar is forbidden**. Back navigation relies on the system back key/gesture (`Activity` defaults to `finish()`); do not deliver a back callback through an `onBack` parameter.
 
-### 2. 高度
+### 2. Height
 
-- 标题区高度固定为 **64dp**。
+- The title area has a fixed height of **64dp**.
 
-- 顶部栏整体无需在 64dp 之外再叠加额外高度。
+- The top bar as a whole needs no additional height beyond 64dp.
 
-### 3. 标题
+### 3. Title
 
-- 标题**居左**，水平内边距 `horizontal = 16.dp`，纵向居中。
+- The title is **left-aligned**, with horizontal padding `horizontal = 16.dp`, vertically centered.
 
-- 标题字号使用 `MaterialTheme.typography.titleLarge`。
+- The title font size uses `MaterialTheme.typography.titleLarge`.
 
-- 标题**必须加粗**：`fontWeight = FontWeight.Bold`。
+- The title **must be bold**: `fontWeight = FontWeight.Bold`.
 
-### 4. 背景色
+### 4. Background Color
 
-- 顶部栏背景**恒为透明**（`AppTopBar` 默认 `Color.Transparent`），露出页面根部背景层：默认外观风格为「纯色 + 主题色/近似色渐变（浅色含柔光+高斯模糊，深色为黑底对角渐变）」（`theme/DefaultPageBackground.kt`，可在应用设置「默认主题渐变」关闭，关闭后为纯色底），玻璃系风格为玻璃页面渐变。标题与图标统一使用 `colorScheme.onBackground`。
-- 页面根容器（`MiuixScaffold(containerColor = …)`、页面级 Box）同样**不得铺不透明背景色**（一律 `Color.Transparent`），背景由根部背景层负责；否则会把渐变背景整片盖掉。
+- The top bar background is **always transparent** (`AppTopBar` defaults to `Color.Transparent`), revealing the page root background layer: the default appearance style is "solid color + theme color/near color gradient (light includes soft glow + Gaussian blur; dark is a black-based diagonal gradient)" (`theme/DefaultPageBackground.kt`, which can be turned off in app settings under "Default theme gradient", after which the background is solid), and glass-style variants use the glass page gradient. Title and icons uniformly use `colorScheme.onBackground`.
+- Page root containers (`MiuixScaffold(containerColor = ...)`, page-level Box) likewise **must not paint an opaque background** (always `Color.Transparent`); the background is the root background layer's responsibility, otherwise the gradient background is covered entirely.
 
-- **玻璃系外观风格（复古玻璃 / 高级玻璃）**：玻璃下页面背景透明，顶栏保持透明（露出渐变/色斑与环境光）。
-  因此**页面内容必须整体垫在顶栏下方**（用持久 `Modifier.padding(top = 顶栏高度)`，而不是滚动区的
-  `contentPadding`），否则滚动内容会从顶栏下方穿过与标题重叠。设置类页面（MiuixScaffold）的
-  `innerPadding` 顶部值一律加到列表 modifier 上，`contentPadding` 只保留额外的间距。
+- **Glass appearance styles (Retro Glass / Advanced Glass)**: under glass the page background is transparent and the top bar stays transparent (revealing the gradient/color patches and ambient light).
+  Therefore **page content must be padded below the top bar as a whole** (using a persistent `Modifier.padding(top = top bar height)`, not the scroll area's
+  `contentPadding`), otherwise scrolling content passes under the top bar and overlaps the title. For settings-style pages (`MiuixScaffold`), the
+  top value of `innerPadding` must always be added to the list modifier, and `contentPadding` keeps only the additional spacing.
 
-- 禁止使用主题色 `primary` 作为顶部栏背景。
+- Using the theme color `primary` as the top bar background is forbidden.
 
-### 5. 状态栏
+### 5. Status Bar
 
-- 状态栏必须是**透明沉浸式**（`window.statusBarColor = Color.TRANSPARENT`），顶部栏的
-  页面背景色向上延伸覆盖状态栏区域。
+- The status bar must be **transparent and immersive** (`window.statusBarColor = Color.TRANSPARENT`), and the top bar's
+  page background color extends upward to cover the status bar area.
 
-- 状态栏/导航栏图标使用**深色**（`SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)`），因为页面背景为浅色。
+- Status bar/navigation bar icons use **dark** (`SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)`), because the page background is light.
 
-- 顶部栏需使用 `Modifier.statusBarsPadding()`，使标题内容避开状态栏但背景色连续延伸。
+- The top bar must use `Modifier.statusBarsPadding()`, so the title content avoids the status bar while the background color extends continuously.
 
-- 不要自行给状态栏设置非透明背景色。
+- Do not set a non-transparent background color on the status bar yourself.
 
-### 6. 位置顺序
+### 6. Position Order
 
 ```
-Column(fillMaxSize)                                // 页面根
-├── Column(fillMaxWidth, background(background))    // 页面背景色容器（不透明）
-│   ├── Column(statusBarsPadding)                    // 避开状态栏（背景延伸至状态栏）
-│   └── Column(height 64dp, padding horizontal 16dp)  // 标题区
-└── 正文内容
+Column(fillMaxSize)                                // page root
+├── Column(fillMaxWidth, background(background))    // page background color container (opaque)
+│   ├── Column(statusBarsPadding)                    // avoids the status bar (background extends to the status bar)
+│   └── Column(height 64dp, padding horizontal 16dp)  // title area
+└── body content
 ```
 
-> 设置类页面若使用 `MiuixScaffold`，`containerColor` 取 `Color.Transparent`（背景由根部背景层绘制）；顶部栏在 `topBar` 槽中按同样规则实现：
-> `Column(background(background)) { Column(statusBarsPadding) { Row(height 64dp, padding horizontal 16dp) { ... } } }`，
-> 并设 `contentWindowInsets = WindowInsets(0.dp)` 避免系统 inset 再次叠加间距。
+> If a settings-style page uses `MiuixScaffold`, `containerColor` takes `Color.Transparent` (the background is drawn by the root background layer); the top bar in the `topBar` slot is implemented by the same rules:
+> `Column(background(background)) { Column(statusBarsPadding) { Row(height 64dp, padding horizontal 16dp) { ... } } }`,
+> and set `contentWindowInsets = WindowInsets(0.dp)` to avoid system insets adding spacing again.
 
-### 7. 顶部栏图标按钮
+### 7. Top Bar Icon Buttons
 
-- 顶部栏右侧图标按钮**必须使用公共组件** `com.tyranor.next.ui.common.TopBarIcon`（排版规范对齐游戏页顶部栏），**禁止**自行用 `IconButton`/`Icon` 拼装。
+- Top bar right-side icon buttons **must use the shared component** `com.tyranor.next.ui.common.TopBarIcon` (layout aligned with the games page top bar); assembling your own with `IconButton`/`Icon` is **forbidden**.
 
-- 组件排版：`Image` 渲染 + `size(34.dp)` 触控区 + `clip(RoundedCornerShape(6.dp))` 圆角 + `clickable` + `padding(4.dp)` 内边距，并 `ColorFilter.tint` 主题色；组件左侧自带 `padding(start = 2.dp)`，保证相邻图标之间留白统一。
+- Component layout: `Image` rendering + `size(34.dp)` touch area + `clip(RoundedCornerShape(6.dp))` corner radius + `clickable` + `padding(4.dp)` inner padding, plus `ColorFilter.tint` with the theme color; the component carries its own `padding(start = 2.dp)`, ensuring uniform spacing between adjacent icons.
 
-- `tint` 由调用方传入当前主题色：Material 页面传 `MaterialTheme.colorScheme.primary`，Miuix 页面传 `MiuixTheme.colorScheme.primary`。
+- `tint` is passed by the caller as the current theme color: Material pages pass `MaterialTheme.colorScheme.primary`, Miuix pages pass `MiuixTheme.colorScheme.primary`.
 
-- 顶部栏图标一律使用 drawable 资源（`R.drawable.ic_*`）；需要新图标时在 `res/drawable` 新建资源（PNG 或 vector XML），禁止直接用 `Icons.*` 矢量图标充当顶部栏按钮。
+- Top bar icons always use drawable resources (`R.drawable.ic_*`); when a new icon is needed, create a resource in `res/drawable` (PNG or vector XML). Using `Icons.*` vector icons directly as top bar buttons is forbidden.
 
-### 8. 明文豁免
+### 8. Explicit Exemption
 
-- **明文豁免（按键方案布局编辑器）**：`ui/settings/PadLayoutEditScreen.kt`（`PadLayoutEditActivity`）**不设顶部栏**，编辑画布占满全屏（含系统栏区域）——为有意设计，不受本节 0–7 条约束。理由：该页的核心契约是与游戏内按键层**同视口**（按钮位置按视口归一化存储，横竖屏按比例重映射），顶栏会压缩画布高度、使「所见即所得」失效。操作方式与退出方式由进屏 Toast 说明，保存经编辑面板内的「保存」触发，退出走系统返回键。**该豁免仅限本页**，其余页面一律使用 `AppTopBar`，不得援引。
-- **同一豁免的延伸（该页复用 engine 原生编辑 UI）**：本页把 engine 侧的原生按键层与编辑面板（`com.core.input.VirtualPadView` / `VirtualPadEditPanel`，由 core 门面 `PadEditorHost` 提供 `rootView`）整体当作画布，因此**该页内的自绘弹窗与文字尺寸**同样随本页豁免「跨页面一致性要求」的弹窗白底 / 8dp 圆角与两档排版（面板为深色卡片、随游戏画面同视口呈现，见 `VirtualPadEditPanel.showDarkDialog`）。延伸豁免**同样仅限本页与游戏内按键层**：设置域的其它弹窗（`AppAlertDialog`）必须照常遵守弹窗点击反馈、白底与 8dp 圆角规范。**理由修正**：该页 Activity 固定 `sensorLandscape`（见 `AndroidManifest.xml`），编辑器本身不经历横竖屏切换；「横竖屏按比例重映射」描述的是**游戏内**按键层的行为。
-
-***
-
-## 跨页面一致性要求
-
-- 所有页面共用 `PlaceholderPage`（或与之一致的结构），禁止各页面各自实现不同样式的顶部栏。
-
-- 新增页面时：页面主体内容放入 `Column` 的正文区域即可，顶部栏保持相同。
-
-- 顶部栏下方禁止放置页面说明/描述文案；正文区域应直接展示该页面的实际内容或列表。
-
-- 页面切换动画必须保持统一：主 Screen 四个 Tab 间切换使用水平移动动画；其他独立 Activity 页面进入使用向上翻页动画，退出/返回使用向下翻页动画。
-
-- 组件统一圆角数值为 **8dp**；列表项卡片、功能项卡片、弹窗等圆角组件统一引用 `theme/AppShapes.kt`：
-  `AppComponentShape`（默认 8dp / 玻璃外观风格与悬浮导航一致 32dp）、Miuix 组件用 `AppComponentCornerRadius`、
-  抽屉顶部用 `AppSheetTopShape`；禁止再散落圆角字面量。
-
-- **平板侧栏**：`isSideRailLayout()`（`isTabletScreen()` 命中且应用设置「平板侧边栏」开关开启，默认开）命中时主导航移到侧边（`ui/common/AppNavigationRail.kt`）：侧栏形态按外观风格取该主题「默认导航栏」形态，液态玻璃两档与「悬浮按钮」不适配侧栏；侧栏占布局宽度，底部留白归零；高级玻璃侧栏采样单独的纯背景层（`railBackdrop`，不能采样内容层——坐标会越界）。选中态图标动画统一用 `ui/common/NavigationTabIcon.kt`。
-
-- **圆角豁免**：液态玻璃导航（`ui/common/LiquidGlassNavigation.kt`）的栏体与导航项胶囊使用 **16dp**（8dp 基础上加大 8dp），为有意设计，不受 8dp 条款约束；其余组件不得援引此豁免。
-
-- **圆角豁免（液态玻璃 · 透镜底栏）**：应用设置「导航栏样式」选到「液态玻璃 · 透镜」后挂载的
-  `ui/common/glass/EnhancedLiquidGlassNavigation.kt`（栏体 / 图标副本行 / 移动透镜三处）使用
-  `theme/AppShapes.kt` 的 `AppNavCapsuleShape`（胶囊，圆角 = 半高），为本项目为该样式既定的连续胶囊轮廓，为有意设计。
-  **该组件内也必须统一引用 `AppNavCapsuleShape`，不得就地新建等价的圆角形状**；该豁免仅限该组件，其余组件不得援引。
-
-- **圆角豁免（悬浮按钮导航）**：「导航栏样式 = 悬浮按钮」后挂载的 `ui/common/FloatingGlassNavButton.kt`
-  主按钮与弧上导航项使用 `CircleShape`（圆形是本样式既定形态），为有意设计；该豁免仅限该组件，其余组件不得援引。
-  **材质固定为液态玻璃的浅 / 深两档**（浅色 = 白玻璃、深色 = 深色玻璃），**只按 `AppThemeColors.isDark` 取档，
-  不随外观风格（默认 / 复古玻璃 / 高级玻璃）分档**（本样式自带固定观感，是 3.5 节「组件必须走动态常量」的豁免；
-  固定色取自 `theme/Color.kt` 的 `FloatingNavGlassSurface` / `FloatingNavGlassSurfaceDark` /
-  `GlassUnselected` / `FloatingNavGlassUnselectedDark`，
-  沿用原版图标，图标强调色与接近光效跟随主题色，触边使用半透明主题色玻璃覆盖），组件内不得引入 `AppThemeColors` 的**风格**判断（深浅取档是允许且必须的）。
-  **长按拖动位置**：位置以归一化坐标存 `AppSettingsStore`（安全区内换算，见 `floatingNavPositionPx` /
-  `clampFloatingNavPosition`），展开方向按象限自适应（`floatingNavArcStartAngle`），设置页有「重置悬浮按钮位置」；
-  收起时长按展开并连续滑选；展开后长按主按钮收起并进入自由移动，同一手指可持续拖动。
-  展开后单点子控件切页保持展开，连续滑选松手确认后收起；主控件维持 64dp，主子图标统一为 28dp。
-  展开位置固定，触碰子控件不得带动其它子控件移动；圆球靠近时只缩放并按固定间距限制相交。
-  页面点击由共同父层观察，事件不得消费：同一次点击同时收起导航并执行页面选项，不铺全屏拦截层。
-  触觉反馈保留展开/收起、确认选中、长按进入移动与实际落位；接近、移入或切换子控件候选时不得震动。
-  悬浮按钮在平板也保持圆球导航，弧形半径与选项尺寸按安全区自适应；其它样式的平板侧栏规则不变。
-
-- 所有弹窗背景必须为白色，且圆角必须使用统一圆角数值 **8dp**。
-
-## 页面内容文字尺寸规范
-
-页面内容（顶部栏除外）只允许使用**两种**文字尺寸，与引擎设置页保持一致：
-
-1. `MaterialTheme.typography.titleMedium`（大字号，15sp，在 `theme/Type.kt` 中全局覆盖，Material 默认 16sp）—— 卡片头、对话框标题、列表项主标题（可加粗）。
-2. `MaterialTheme.typography.bodyMedium` —— 正文、行值、辅助描述、按钮文字、空态/错误提示。
-
-- **禁止**使用 `bodySmall` / `bodyLarge` / `labelMedium` / `labelLarge` / `headlineMedium` / `headlineSmall` 等其它排版尺寸。
-
-- Miuix preference 组件标题默认用 `headline1`(17sp)，已在 `MiuixSettingsTheme` 中全局覆盖为 15sp（`defaultTextStyles(headline1 = TextStyle(fontSize = 15.sp))`），使其严格落入两档并匹配 `titleMedium`；不要自行在单行上改字号。
-
-- 顶部栏标题不受此限制，仍用 `MaterialTheme.typography.titleLarge` Bold。
-
-- **明文豁免**：首页快捷启动卡（`ui/home/HomeScreen.kt` 的 QuickLaunchCard）以封面模糊图 + 黑色压暗遮罩为背景、白色文字展示，卡片内游戏名使用 `MaterialTheme.typography.titleLarge` Bold、引擎名使用 `MaterialTheme.typography.headlineSmall` Bold，均不受两档制限制；该卡片其余文字仍遵循两档制。
-
-- **明文豁免**：游戏页卡片左上角的引擎类型角标（`ui/game/GameScreen.kt` 的 `GameCard`，仅覆盖在封面上）使用 `MaterialTheme.typography.labelSmall`（11sp）——角标属封面上的小型标注，按两档制会过大；仅此一处豁免，其余正文仍遵循两档制。角标底色/文字色为**固定样式**（`theme/Color.kt` 的 `CoverBadgeBackground` / `CoverBadgeText`：半透明黑底 + 白字），**不随主题色、外观模式与色调切换变化**。
+- **Explicit exemption (pad layout editor)**: `ui/settings/PadLayoutEditScreen.kt` (`PadLayoutEditActivity`) **has no top bar**; the editing canvas occupies the entire screen (including system bar areas) — this is intentional design and is exempt from rules 0–7 of this section. Reason: the core contract of this page is to be **in the same viewport** as the in-game input pad layer (button positions are stored normalized to the viewport, and remapped proportionally across portrait/landscape), and a top bar would compress the canvas height and break "what you see is what you get". How to operate and how to exit is explained by a Toast shown on entering the screen; saving is triggered by "Save" in the editing panel, and exiting goes through the system back key. **This exemption applies only to this page**; every other page must use `AppTopBar` and must not invoke it.
+- **Extension of the same exemption (this page reuses the engine's native editing UI)**: this page treats the engine-side native input pad layer and editing panel (`com.core.input.VirtualPadView` / `VirtualPadEditPanel`, whose `rootView` is provided by the core facade `PadEditorHost`) as its canvas as a whole, so **self-drawn dialogs and text sizes within this page** are likewise exempt, along with this page, from the cross-page consistency requirements for white dialog backgrounds / 8dp corner radius and the two-tier typography (the panel is a dark card presented in the same viewport as the game image; see `VirtualPadEditPanel.showDarkDialog`). The extended exemption **is likewise limited to this page and the in-game input pad layer**: other dialogs in the settings domain (`AppAlertDialog`) must still obey the dialog click-feedback, white background, and 8dp corner radius rules. **Reason correction**: this page's Activity is fixed to `sensorLandscape` (see `AndroidManifest.xml`), so the editor itself never goes through portrait/landscape switching; "remapped proportionally across portrait/landscape" describes the behavior of the **in-game** input pad layer.
 
 ***
 
-## 搜索/输入框统一规范
+## Cross-Page Consistency Requirements
 
-全 App 的搜索过滤框与弹窗内单行文本输入框，必须统一使用公共组件
-`com.tyranor.next.ui.common.AppSearchField`（`app/src/main/java/com/tyranor/next/ui/common/AppSearchField.kt`）。
-**禁止**在页面内直接拼装 Miuix `SearchBar`/`InputField`，也**禁止**使用 Material 的
-`TextField`/`OutlinedTextField` 充当搜索框或弹窗输入框。
+- All pages share `PlaceholderPage` (or a structure consistent with it); pages must not each implement top bars in different styles.
 
-### 1. 组件形态（Miuix 风格，非展开内嵌式）
+- When adding a page: put the page body content into the `Column`'s body area; keep the top bar identical.
 
-- 组件内部固定为 `MiuixSettingsTheme + SearchBar + InputField` 模板，`expanded` 恒为
-  `false`（内嵌式），不使用 Miuix 的展开式全屏搜索页形态。
+- Page description/explanation text must not be placed below the top bar; the body area should directly show the page's actual content or list.
 
-- 前导图标固定 **26dp**，内边距固定 `SearchBarDefaults.LeadingIconStartPadding /
-  LeadingIconEndPadding`，`tint` 统一取 `MiuixTheme.colorScheme.primary`——以上均由组件
-  内部处理，调用方不要传色值/尺寸，保证全局样式单点可改。
+- Page transition animations must stay consistent: switching among the four main Screen tabs uses a horizontal movement animation; entering other standalone Activity pages uses an upward page-flip animation, and exiting/going back uses a downward page-flip animation.
 
-### 2. 参数约定
+- The unified corner radius value for components is **8dp**; rounded components such as list item cards, feature item cards, and dialogs uniformly reference `theme/AppShapes.kt`:
+  `AppComponentShape` (8dp by default / 32dp for glass appearance styles and floating navigation), Miuix components use `AppComponentCornerRadius`,
+  and the drawer top uses `AppSheetTopShape`; no more scattered corner radius literals.
 
-- `query` / `onQueryChange`：必传，输入状态由调用方持有。
+- **Tablet side rail**: when `isSideRailLayout()` matches (`isTabletScreen()` hits and the app setting "Tablet sidebar" toggle is on, on by default), the main navigation moves to the side (`ui/common/AppNavigationRail.kt`): the rail form takes the theme's "default navigation bar" form according to the appearance style; both Liquid Glass tiers and "Floating Button" do not adapt to the rail; the rail occupies layout width and the bottom inset becomes zero; the Advanced Glass rail samples a separate pure background layer (`railBackdrop`; it must not sample the content layer — coordinates would go out of bounds). Selected-state icon animation uniformly uses `ui/common/NavigationTabIcon.kt`.
 
-- `onSearch`：键盘 IME 动作回调。本地即时过滤场景可不传（默认空实现）；
-  需显式触发时传入（如网络请求、回车即保存）。
+- **Corner radius exemption**: the bar body and navigation item capsules of Liquid Glass navigation (`ui/common/LiquidGlassNavigation.kt`) use **16dp** (8dp plus 8dp), which is intentional design and not subject to the 8dp clause; other components must not invoke this exemption.
 
-- `leadingIcon`：drawable 资源（`R.drawable.ic_*`）。搜索语义用默认 `ic_game_search`；
-  其他语义必须传对应图标（如名称修改用 `ic_sheet_rename`），禁止搜索图标滥用。
+- **Corner radius exemption (Liquid Glass · Lens bottom bar)**: `ui/common/glass/EnhancedLiquidGlassNavigation.kt` mounted after selecting "Liquid Glass · Lens" in the app setting "Navigation bar style" (three places: bar body / icon copy row / moving lens) uses
+  `theme/AppShapes.kt`'s `AppNavCapsuleShape` (capsule, corner radius = half height), the continuous capsule outline established by this project for that style, and is intentional design.
+  **That component must also uniformly reference `AppNavCapsuleShape` and must not define an equivalent corner shape in place**; this exemption applies only to that component and no other component may invoke it.
 
-- `iconContentDescription`：无障碍描述，跟随图标语义。
+- **Corner radius exemption (floating button navigation)**: `ui/common/FloatingGlassNavButton.kt` mounted after "Navigation bar style = Floating Button"
+  uses `CircleShape` for the main button and the arc navigation items (a circle is the established form of this style), which is intentional design; this exemption applies only to that component and no other component may invoke it.
+  **The material is fixed to the light / dark tiers of Liquid Glass** (light = white glass, dark = dark glass), **selected only by `AppThemeColors.isDark`,
+  not by appearance style (default / retro glass / advanced glass)** (this style carries a fixed look and is an exemption from section 3.5's "components must go through dynamic constants";
+  the fixed colors come from `theme/Color.kt`'s `FloatingNavGlassSurface` / `FloatingNavGlassSurfaceDark` /
+  `GlassUnselected` / `FloatingNavGlassUnselectedDark`,
+  it keeps the original icons, the icon accent color and approach glow follow the theme color, and the touch edge uses a semi-transparent theme-color glass overlay); the component must not introduce an `AppThemeColors` **style** check (picking the tier by light/dark is allowed and required).
+  **Long-press drag position**: the position is stored in `AppSettingsStore` as normalized coordinates (converted within the safe area, see `floatingNavPositionPx` /
+  `clampFloatingNavPosition`), the expansion direction adapts by quadrant (`floatingNavArcStartAngle`), and the settings page has "Reset floating button position";
+  when collapsed, a long press expands and continuous sliding selects; after expansion, a long press on the main button collapses it and enters free movement, and the same finger can keep dragging.
+  After expansion, a single tap on a child control switches pages and keeps it expanded; continuous slide-selection collapses after the release confirms. The main control stays 64dp, and main/child icons are uniformly 28dp.
+  The expansion position is fixed, and touching a child control must not drag the others; when the sphere approaches, only scaling happens and intersection is limited by a fixed spacing.
+  Page clicks are observed by the common parent layer and events must not be consumed: the same click both collapses the navigation and executes the page option, with no full-screen intercepting layer.
+  Haptic feedback is kept for expand/collapse, selection confirmation, long-press entering movement, and actual landing; there must be no vibration when approaching, moving into, or switching between child control candidates.
+  On tablets the floating button still keeps the sphere navigation, with arc radius and option size adapting to the safe area; tablet side rail rules for other styles stay unchanged.
 
-- `modifier`：仅用于布局微调（如外边距），宽度由组件内部 `fillMaxWidth` 保证。
+- All dialog backgrounds must be white, and the corner radius must use the unified value **8dp**.
 
-### 3. 现有调用点（新增场景照此对齐）
+## Page Content Text Size Rules
 
-| 场景          | 位置                                 | 图标                | onSearch        |
+Page content (except the top bar) may only use **two** text sizes, consistent with the engine settings page:
+
+1. `MaterialTheme.typography.titleMedium` (large size, 15sp, globally overridden in `theme/Type.kt`; Material's default is 16sp) — card headers, dialog titles, list item primary titles (may be bold).
+2. `MaterialTheme.typography.bodyMedium` — body text, row values, secondary descriptions, button text, empty/error messages.
+
+- Using other typography sizes such as `bodySmall` / `bodyLarge` / `labelMedium` / `labelLarge` / `headlineMedium` / `headlineSmall` is **forbidden**.
+
+- Miuix preference component titles default to `headline1` (17sp), which has already been globally overridden to 15sp in `MiuixSettingsTheme` (`defaultTextStyles(headline1 = TextStyle(fontSize = 15.sp))`), so they fall strictly into the two tiers and match `titleMedium`; do not change the font size per row yourself.
+
+- Top bar titles are not subject to this restriction and still use `MaterialTheme.typography.titleLarge` Bold.
+
+- **Explicit exemption**: the home quick launch card (`QuickLaunchCard` in `ui/home/HomeScreen.kt`) uses a blurred cover image + black dimming overlay as background with white text; the game name inside the card uses `MaterialTheme.typography.titleLarge` Bold and the engine name uses `MaterialTheme.typography.headlineSmall` Bold, neither subject to the two-tier rule; the rest of that card's text still follows the two-tier rule.
+
+- **Explicit exemption**: the engine type badge in the top-left corner of game page cards (`GameCard` in `ui/game/GameScreen.kt`, overlaid on the cover only) uses `MaterialTheme.typography.labelSmall` (11sp) — the badge is a small annotation on the cover and would be too large under the two-tier rule; this is the only exemption, and all other body text still follows the two-tier rule. The badge background/text colors are a **fixed style** (`CoverBadgeBackground` / `CoverBadgeText` in `theme/Color.kt`: translucent black background + white text) and **do not change with the theme color, appearance mode, or tone switching**.
+
+***
+
+## Unified Search/Input Field Rules
+
+App-wide search filter fields and single-line text inputs inside dialogs must uniformly use the shared component
+`com.tyranor.next.ui.common.AppSearchField` (`app/src/main/java/com/tyranor/next/ui/common/AppSearchField.kt`).
+**Forbidden**: assembling Miuix `SearchBar`/`InputField` directly in a page, and using Material's
+`TextField`/`OutlinedTextField` as a search field or dialog input.
+
+### 1. Component Form (Miuix style, non-expanding inline)
+
+- Inside, the component is fixed to the `MiuixSettingsTheme + SearchBar + InputField` template, with `expanded` always
+  `false` (inline); it does not use Miuix's expanding full-screen search page form.
+
+- The leading icon is fixed at **26dp**, padding is fixed to `SearchBarDefaults.LeadingIconStartPadding /
+  LeadingIconEndPadding`, and `tint` is uniformly `MiuixTheme.colorScheme.primary` — all of the above is handled inside the component;
+  callers must not pass colors/sizes, keeping the global style modifiable in one place.
+
+### 2. Parameter Conventions
+
+- `query` / `onQueryChange`: required; the input state is held by the caller.
+
+- `onSearch`: keyboard IME action callback. Local instant-filter scenarios may omit it (empty implementation by default);
+  pass it when an explicit trigger is needed (e.g. network request, save on Enter).
+
+- `leadingIcon`: drawable resource (`R.drawable.ic_*`). Search semantics use the default `ic_game_search`;
+  other semantics must pass the corresponding icon (e.g. `ic_sheet_rename` for renaming). Abusing the search icon is forbidden.
+
+- `iconContentDescription`: accessibility description, following the icon semantics.
+
+- `modifier`: only for layout fine-tuning (e.g. outer margins); the width is guaranteed by the component's internal `fillMaxWidth`.
+
+### 3. Existing Call Sites (align new scenarios with these)
+
+| Scenario          | Location                                 | Icon                | onSearch        |
 | ----------- | ---------------------------------- | ----------------- | --------------- |
-| 游戏库过滤       | `GameScreen.kt`（顶栏下方）              | `ic_game_search`  | 即时过滤，不传         |
-| VNDB 封面搜索   | `GameScreen.kt`（VndbSearchDialog）  | `ic_game_search`  | `search()` 网络请求 |
-| krkr 在线补丁过滤 | `KrkrOnlinePatchActivity.kt`（列表首项） | `ic_game_search`  | 即时过滤，不传         |
-| 名称修改        | `GameScreen.kt`（RenameGameDialog）  | `ic_sheet_rename` | 内容有效即保存         |
+| Game library filtering       | `GameScreen.kt` (below the top bar)              | `ic_game_search`  | instant filter, omit         |
+| VNDB cover search   | `GameScreen.kt` (VndbSearchDialog)  | `ic_game_search`  | `search()` network request |
+| krkr online patch filtering | `KrkrOnlinePatchActivity.kt` (first item in the list) | `ic_game_search`  | instant filter, omit         |
+| Rename        | `GameScreen.kt` (RenameGameDialog)  | `ic_sheet_rename` | saves as soon as the content is valid         |
 
 ***
 
-## 标签栏统一规范
+## Unified Tab Bar Rules
 
-全 App 的「标签栏 / 分类栏」（横向排布、单选切换、选中项带背景指示器的场景）**必须**统一使用公共组件
-`com.tyranor.next.ui.common.SlidingTabRow`（`app/src/main/java/com/tyranor/next/ui/common/SlidingTabRow.kt`）。
-**禁止**在页面内手写指示器偏移、等分宽度、选中背景与文字取色（引擎页原自绘 `GlassTabRow` 已并入本组件）。
+App-wide "tab bars / category bars" (horizontally laid out, single-select switching, where the selected item has a background indicator) **must** uniformly use the shared component
+`com.tyranor.next.ui.common.SlidingTabRow` (`app/src/main/java/com/tyranor/next/ui/common/SlidingTabRow.kt`).
+**Forbidden**: hand-writing indicator offsets, equal-width division, selected background, or text color in a page (the engine page's former self-drawn `GlassTabRow` has been merged into this component).
 
-### 1. 组件形态与参数
+### 1. Component Form and Parameters
 
-- 选中项为**独立背景指示器**（不是逐项背景），切换时以 200ms 线性动画滑到目标标签；滚动态标签宽度不齐时宽度同步动画。指示器圆角统一 `AppComponentShape`，玻璃系由组件内部调用 `glassBorder` 补 0.5dp 发丝描边。
-- 指示器底色与文字颜色由组件内部按外观风格分派，**调用方不得传色值**：
-  默认风格指示器 `NavWhite`、选中文字 `TextColor`（不跟随主题色，加粗作选中标识）、未选中 `onSurfaceVariant`；
-  复古玻璃 `GlassSurfaceHigh` + `GlassText`/`GlassTextSecondary`；高级玻璃 `AdvancedGlassSurfaceHigh` + `GlassText`/`AdvancedGlassTextSecondary`。
-- 标签高度统一 42dp，文字统一 `MaterialTheme.typography.titleMedium`，选中加粗；无障碍统一 `selectable(selected, role = Tab)`。
-- 参数：`tabs`（标签文案）、`selectedIndex`（越界自动收敛）、`onTabSelected`、`modifier`（仅外边距）、`scrollable`（形态开关，默认 false）。
+- The selected item is an **independent background indicator** (not a per-item background); when switching, it slides to the target tab with a 200ms linear animation; when widths are uneven in scrollable mode, the width animates in sync. The indicator corner radius uniformly uses `AppComponentShape`, and for glass styles the component internally calls `glassBorder` to add a 0.5dp hairline stroke.
+- The indicator base color and text colors are dispatched inside the component by appearance style; **callers must not pass colors**:
+  default style indicator `NavWhite`, selected text `TextColor` (does not follow the theme color; bold marks selection), unselected `onSurfaceVariant`;
+  retro glass `GlassSurfaceHigh` + `GlassText`/`GlassTextSecondary`; advanced glass `AdvancedGlassSurfaceHigh` + `GlassText`/`AdvancedGlassTextSecondary`.
+- Tab height is uniformly 42dp, text uniformly `MaterialTheme.typography.titleMedium`, bold when selected; accessibility uniformly `selectable(selected, role = Tab)`.
+- Parameters: `tabs` (tab labels), `selectedIndex` (out-of-range values are clamped automatically), `onTabSelected`, `modifier` (outer margins only), `scrollable` (form switch, default false).
 
-### 2. 两种形态
+### 2. Two Forms
 
-- `scrollable = false`（默认）：标签**等分宽度**，适合数量固定、宽度一致的分页。
-- `scrollable = true`：标签按**内容宽度横向滚动**，适合数量多 / 宽度不齐的分类；两端内置 12dp 留白，选中项在屏幕外（程序化回退、进程恢复）时自动滚动到可见（首次直接定位，之后带动画）。页面侧不得用 `LazyRow` 自行拼装等价物。
+- `scrollable = false` (default): tabs have **equal widths**, suitable for paging with a fixed count and uniform width.
+- `scrollable = true`: tabs **scroll horizontally by content width**, suitable for categories that are numerous / uneven in width; 12dp padding is built in at both ends, and when the selected item is off-screen (programmatic fallback, process restoration) it scrolls into view automatically (immediately positioned the first time, animated afterwards). Pages must not assemble an equivalent with `LazyRow`.
 
-### 3. 现有调用点（新增场景照此对齐）
+### 3. Existing Call Sites (align new scenarios with these)
 
-| 场景 | 位置 | 形态 |
+| Scenario | Location | Form |
 | --- | --- | --- |
-| 引擎页顶部分页（玻璃外观） | `EngineScreen.kt` | 等分 |
-| 首页「分类仓库」分类栏（全部/快捷/最近/各引擎类型） | `CategoryWarehouse.kt` | 横向滚动 |
+| Engine page top paging (glass appearance) | `EngineScreen.kt` | equal width |
+| Home "Category Warehouse" category bar (All / Quick / Recent / each engine type) | `CategoryWarehouse.kt` | horizontal scroll |
 
-> 例外：引擎页在默认外观风格下沿用 Miuix `TabRow`（等分分页的既有观感，含动画指示器），仅在玻璃外观下走本组件；新增场景（含默认风格）一律用本组件。
+> Exception: in the default appearance style the engine page keeps using Miuix `TabRow` (the existing feel of equal-width paging with an animated indicator) and only uses this component under glass appearances; new scenarios (including the default style) always use this component.
 
 ***
 
-## 功能跳转条目统一规范
+## Unified Feature Navigation Item Rules
 
-所有「功能跳转列」——即点击后进入 / 跳转 / 打开下一级的条目（如封面来源列表、弹窗内的群聊/频道项、设置里的二级跳转项等），**必须**统一使用公共组件
-`com.tyranor.next.ui.common.AppNavItem`（`app/src/main/java/com/tyranor/next/ui/common/AppNavItem.kt`）。
-**禁止**在页面/弹窗内手写 `Row`/`Column` 拼装此类条目，也禁止混用 Material 的 `ListItem`/`ColumnItem` 等。
+All "feature navigation lists" — i.e. items that enter / navigate / open a next level when clicked (such as the cover source list, group chat/channel items inside dialogs, secondary navigation items in settings, etc.) — **must** uniformly use the shared component
+`com.tyranor.next.ui.common.AppNavItem` (`app/src/main/java/com/tyranor/next/ui/common/AppNavItem.kt`).
+**Forbidden**: hand-assembling such items with `Row`/`Column` in pages/dialogs, and mixing in Material's `ListItem`/`ColumnItem` etc.
 
-### 1. 组件形态与参数
+### 1. Component Form and Parameters
 
-- 排版固定：圆角 `AppComponentShape`（默认 8dp / 玻璃风格 32dp，见 `theme/AppShapes.kt`）+ 背景取 `theme/Color.kt` 常量 `NavWhite`（页面场景默认）+ 内边距（横向 16dp / 纵向 12dp）+ 左侧图标 24dp + 右侧指示箭头 `KeyboardArrowRight`。均由组件内部处理。
+- Layout is fixed: corner radius `AppComponentShape` (8dp by default / 32dp for glass styles, see `theme/AppShapes.kt`) + background from the `theme/Color.kt` constant `NavWhite` (default for page scenarios) + padding (16dp horizontal / 12dp vertical) + 24dp leading icon + right indicator arrow `KeyboardArrowRight`. All handled inside the component.
 
-- 背景色约定（与白底弹窗对偶，详细见 3.5）：**页面上的条目**默认 `NavWhite`（页面背景 `PageGrey` → 灰底白卡）；**弹窗内的条目**必须传 `containerColor = DialogItemSurface`（默认风格 = `PageGrey` 白底弹窗灰卡；玻璃风格 = 亮玻璃面），保证条目与弹窗背景反色、层次分明。「色调切换」开启时 `NavWhite`/`PageGrey` 同步互换，反差关系不变；玻璃风格下 `PageGrey` 透明、`NavWhite` 变为半透明玻璃面，`DialogItemSurface` 自动切换为亮玻璃面。
+- Background color convention (dual to the white dialog, details in 3.5): **items on a page** default to `NavWhite` (page background `PageGrey` → grey base with white card); **items inside a dialog** must pass `containerColor = DialogItemSurface` (default style = `PageGrey` grey card inside the white dialog; glass style = bright glass surface), ensuring the item contrasts with the dialog background and the hierarchy is clear. When "Tone switching" is on, `NavWhite`/`PageGrey` swap in sync and the contrast relationship stays the same; under glass styles `PageGrey` is transparent and `NavWhite` becomes a translucent glass surface, and `DialogItemSurface` automatically switches to the bright glass surface.
 
-- 标题用 `MaterialTheme.typography.bodyMedium`、颜色取 `TextColor`；摘要可选，用 `bodySmall` + 半透明辅助色。均不依赖 `colorScheme.surface*`（遵循「组件背景色统一规范」）。
+- The title uses `MaterialTheme.typography.bodyMedium` with color `TextColor`; the summary is optional, using `bodySmall` + a translucent secondary color. Neither depends on `colorScheme.surface*` (following the "Unified Component Background Color Rules").
 
-- `leadingIcon`：左侧图标 drawable；未提供时组件自动使用**默认占位图标** `DEFAULT_LEADING_ICON`，不允许调用方在不该出现空图标时留白。
+- `leadingIcon`: the leading icon drawable; when not provided, the component automatically uses the **default placeholder icon** `DEFAULT_LEADING_ICON`; callers are not allowed to leave a blank where an icon should appear.
 
-- `showLeadingIcon`：是否展示左侧图标，默认 `true`。**纯动作条目**（如存档导出/导入/删除等无图标的动作项）可传 `false` 隐藏图标位，此时标题顶格排列；不得为隐藏图标而乱传占位图。
+- `showLeadingIcon`: whether to show the leading icon, default `true`. **Pure action items** (such as save export/import/delete action items without an icon) may pass `false` to hide the icon slot, in which case the title aligns to the edge; do not pass a placeholder icon just to hide the icon.
 
-- `onClick`：点击回调；传 `null` 表示不可用（整条变灰且不可点击）。
+- `onClick`: click callback; passing `null` means unavailable (the whole row greys out and is not clickable).
 
-- 进入跳转的 icon 统一用 `KeyboardArrowRight`，组件内置，调用方不传。
+- The navigation icon always uses `KeyboardArrowRight`, built into the component; callers do not pass it.
 
-- `showArrow`：是否显示右侧跳转箭头。**「进入下一级」的跳转条目必须 `true`（默认）**；「执行动作」的条目（如启动游戏、删除等不产生跳转的动作）传 `false` 隐藏箭头，避免误导为可跳转。
+- `showArrow`: whether to show the right navigation arrow. **Navigation items that "enter the next level" must be `true` (default)**; "action" items (actions that produce no navigation, such as launching a game or deleting) pass `false` to hide the arrow, so they are not mistaken for navigable.
 
-- `verticalPadding`（高度豁免条款）：条目纵向内边距默认 **12dp**。**豁免**：底部抽屉面板（`ModalBottomSheet`）内展示的条目可使用更大纵向内边距（当前游戏操作抽屉取 17dp，条目总高 +10dp），仅限抽屉内条目；`AppAlertDialog` 弹窗内条目一律保持默认 12dp。
+- `verticalPadding` (height exemption clause): the item's vertical padding defaults to **12dp**. **Exemption**: items shown inside a bottom sheet panel (`ModalBottomSheet`) may use larger vertical padding (currently the game actions drawer uses 17dp, adding +10dp to the item's total height), limited to items inside drawers; items inside `AppAlertDialog` dialogs always keep the default 12dp.
 
-- `leadingIconTint` / `titleColor`：显式覆盖左侧图标与标题颜色（如游戏操作面板用主题色 `MaterialTheme.colorScheme.primary` 统一图标、危险条目用 `colorScheme.error` 上色）。传 `null`（默认）时使用面板默认行为（深色染白、浅色原图 / `TextColor`）。
+- `leadingIconTint` / `titleColor`: explicitly override the leading icon and title colors (e.g. the game actions panel uniformly tints icons with the theme color `MaterialTheme.colorScheme.primary`, or colors a dangerous item with `colorScheme.error`). Passing `null` (default) uses the panel's default behavior (tinted white in dark mode, original image in light mode / `TextColor`).
 
-- 深色模式适配：左侧图标（PNG drawable）与右侧箭头在深色模式下自动染色为 `Color.White`，浅色模式保持原色不变；不可点击状态（`onClick = null`）保留 `contentAlpha` 衰减。这一适配由组件内部完成，调用方无需处理。
+- Dark mode adaptation: the leading icon (PNG drawable) and the right arrow are automatically tinted `Color.White` in dark mode and keep their original colors in light mode; the unavailable state (`onClick = null`) retains the `contentAlpha` fade. This adaptation is done inside the component; callers need not handle it.
 
-- 颜色判断依赖全局 `AppThemeColors.isDark` 快照，切换外观模式自动重组刷新，与整体主题保持同步。
+- Color decisions rely on the global `AppThemeColors.isDark` snapshot and automatically recompose and refresh when the appearance mode changes, staying in sync with the overall theme.
 
-### 2. 侧边栏面板（AppSidePanel）内条目
+### 2. Items in the Side Panel (AppSidePanel)
 
-妙妙工具侧边栏（`ui/common/AppSidePanel.kt` 的 `content` 槽）内的条目必须使用 `AppNavItem`，统一采用**与弹窗条目一致的完整形态（带图标 + 右侧指示标）**：
+Items in the Miaomiao Tools side panel (the `content` slot of `ui/common/AppSidePanel.kt`) must use `AppNavItem`, uniformly adopting **the complete form consistent with dialog items (with icon + right indicator)**:
 
-- `containerColor = DialogItemSurface`（面板底色为 `NavWhite`，条目反色灰卡，与弹窗内条目为同一对偶关系）。
-- `leadingIcon` 必须传与功能语义对应的具体图标，不得使用组件默认占位图标，也不得隐藏图标位。
-- `showArrow = true`（默认）：面板内条目统一保留右侧指示标，**「执行动作」条目（如启动 kr2 原生）同样不隐藏箭头**——本条优先于上文「执行动作传 `false`」条款。
-- 条目之间的纵向间距由 `AppSidePanel` 内部统一加（`SidePanelItemSpacing` = 8dp，与弹窗内条目列表一致），调用方不得自加外边距。
+- `containerColor = DialogItemSurface` (the panel base color is `NavWhite`, and items are contrasting grey cards, the same dual relationship as dialog items).
+- `leadingIcon` must pass a concrete icon corresponding to the feature semantics; the component's default placeholder icon must not be used, and the icon slot must not be hidden.
+- `showArrow = true` (default): items in the panel uniformly keep the right indicator, and **"action" items (such as launching kr2 native) likewise do not hide the arrow** — this clause takes precedence over the earlier "action items pass `false`" clause.
+- The vertical spacing between items is added uniformly inside `AppSidePanel` (`SidePanelItemSpacing` = 8dp, consistent with item lists inside dialogs); callers must not add their own outer margins.
 
-### 3. 现有调用点（新增场景照此对齐）
+### 3. Existing Call Sites (align new scenarios with these)
 
-| 场景              | 位置                                       | leadingIcon                         |
+| Scenario              | Location                                       | leadingIcon                         |
 | --------------- | ---------------------------------------- | ----------------------------------- |
-| 选择封面来源（五源统一）    | `GameScreen.kt`（CoverSourcePickerDialog） | `ic_cover_source`（云端）               |
-| 加入群聊（企鹅群聊/飞机频道） | `SettingsScreen.kt`（加入群聊弹窗）              | `ic_group_qq` / `ic_group_telegram` |
-| 妙妙工具面板（启动 kr2 原生） | `MainScreen.kt`（`AppSidePanel` 的 `content` 槽） | `ic_settings_engine` |
-| 妙妙工具面板（解封包工具） | `MainScreen.kt`（`AppSidePanel` 的 `content` 槽） | `ic_sheet_archive` |
-| 妙妙工具面板（输入与手柄） | `MainScreen.kt`（`AppSidePanel` 的 `content` 槽） | `ic_input_gamepad` |
+| Select cover source (five sources unified)    | `GameScreen.kt` (CoverSourcePickerDialog) | `ic_cover_source` (cloud)               |
+| Join group chat (QQ group / Telegram channel) | `SettingsScreen.kt` (join group chat dialog)              | `ic_group_qq` / `ic_group_telegram` |
+| Miaomiao Tools panel (launch kr2 native) | `MainScreen.kt` (`content` slot of `AppSidePanel`) | `ic_settings_engine` |
+| Miaomiao Tools panel (unpack/pack tool) | `MainScreen.kt` (`content` slot of `AppSidePanel`) | `ic_sheet_archive` |
+| Miaomiao Tools panel (input and gamepad) | `MainScreen.kt` (`content` slot of `AppSidePanel`) | `ic_input_gamepad` |
 
 ***
 
-## 开关按钮统一规范
+## Unified Toggle Switch Rules
 
-所有需要**布尔二态开关**（开/关）的场景，必须统一使用 **Miuix 风格** 的开关组件，禁止混用 Material3 的 `Switch` 或其他库的开关，避免深浅色 / 主题色 / 触感样式不一致。
+Every scenario needing a **boolean two-state switch** (on/off) must uniformly use **Miuix-style** switch components; mixing in Material3's `Switch` or switches from other libraries is forbidden, to avoid inconsistency in light/dark colors / theme color / tactile styling.
 
-### 1. 组件选型（按场景二选一）
+### 1. Component Selection (pick one per scenario)
 
-- **设置条目式开关**（标题行 + 右侧开关，如设置清单中的配置项）：统一使用
-  `top.yukonga.miuix.kmp.preference.SwitchPreference`（title / checked / onCheckedChange）。
+- **Settings item switch** (title row + right-side switch, such as configuration items in a settings list): uniformly use
+  `top.yukonga.miuix.kmp.preference.SwitchPreference` (title / checked / onCheckedChange).
 
-- **行内独立开关**（列表项右端内嵌、无标题行的纯开关）：统一使用
-  `top.yukonga.miuix.kmp.basic.Switch`（checked / onCheckedChange）。
+- **Inline standalone switch** (a pure switch embedded at the end of a list item with no title row): uniformly use
+  `top.yukonga.miuix.kmp.basic.Switch` (checked / onCheckedChange).
 
-### 2. 现有调用点（新增场景照此对齐）
+### 2. Existing Call Sites (align new scenarios with these)
 
-| 场景                                   | 位置                                                | 组件                 |
+| Scenario                                   | Location                                                | Component                 |
 | ------------------------------------ | ------------------------------------------------- | ------------------ |
-| 设置清单开关（KRKR/ONS/Artemis/RPG Maker 等） | `SettingsScreen.kt`                               | `SwitchPreference` |
-| 应用设置开关（色调切换等）                        | `AppSettingsActivity.kt`                          | `SwitchPreference` |
-| 应用设置「导航栏样式」四选一                      | `AppSettingsActivity.kt`                          | `OverlayDropdownPreference`（非布尔选择，见本节第 3 条例外） |
-| 封面来源启用开关（行内）                         | `CoverScraperSettingsActivity.kt`（CoverSourceRow） | `Switch`           |
+| Settings list switches (KRKR/ONS/Artemis/RPG Maker etc.) | `SettingsScreen.kt`                               | `SwitchPreference` |
+| App settings switches (tone switching etc.)                        | `AppSettingsActivity.kt`                          | `SwitchPreference` |
+| App settings "Navigation bar style" four-way choice                      | `AppSettingsActivity.kt`                          | `OverlayDropdownPreference` (non-boolean choice, see exception 3 in this section) |
+| Cover source enable switch (inline)                         | `CoverScraperSettingsActivity.kt` (CoverSourceRow) | `Switch`           |
 
-### 3. 例外
+### 3. Exceptions
 
-- 三态「跟随全局 / 开 / 关」等**非布尔**选择（如 `PerGameSettingsScreen.kt` 的 `OverrideSwitch`）不属于开关按钮范畴，用 Miuix `OverlayDropdownPreference` 实现，不受本节约束。
+- **Non-boolean** choices such as the three-state "follow global / on / off" (e.g. `OverrideSwitch` in `PerGameSettingsScreen.kt`) do not fall into the toggle switch category; implement them with Miuix `OverlayDropdownPreference`, not subject to this section.
 
-- 引擎原生代码（engine 模块）内的开关不属于 Compose 层，不适用本节。
+- Switches inside engine-native code (the engine module) are not part of the Compose layer and this section does not apply.
 
 ***
 
-## 弹窗点击反馈统一规范
+## Unified Dialog Click Feedback Rules
 
-`AppAlertDialog` 弹窗（含 `title` / `text` / `confirmButton` / `dismissButton` 内容）内的
-**所有按钮与组件不得使用任何点击或按压反馈效果**：涟漪、水波、缩放、高亮、透明度/颜色变化等一律禁止。
-点击行为本身不受影响，仅去掉视觉/触感反馈。
+Inside `AppAlertDialog` dialogs (including `title` / `text` / `confirmButton` / `dismissButton` content),
+**all buttons and components must not use any click or press feedback**: ripples, waves, scaling, highlighting, opacity/color changes, etc. are all forbidden.
+The click behavior itself is unaffected; only the visual/tactile feedback is removed.
 
-### 1. 组件选型
+### 1. Component Selection
 
-- 弹窗文本按钮统一使用 `ui/common/DialogClickEffects.kt` 的 `DialogTextButton`（内部
-  `Modifier.clickable(indication = null)`）；**禁止**在弹窗内直接使用 Material3 `TextButton` /
-  `Button` / `IconButton`，也禁止使用自带按压动效的按钮组件。
-- 弹窗正文中的可点击组件（输入框、列表项、开关、单选等）必须禁用点击反馈：
-  - 区域级：外层包 `CompositionLocalProvider(LocalIndication provides NoIndication)`（`NoIndication` 由 `ui/common` 提供）；
-  - 单点级：对 `Modifier.clickable` 显式传 `indication = null`；
-  - 共享条目组件：`AppNavItem` 显式传 `indication = null`。
-- 遮罩层点击关闭已由 `AppAlertDialog` 内置 `indication = null`，无需调用方处理。
+- Dialog text buttons uniformly use `DialogTextButton` from `ui/common/DialogClickEffects.kt` (internally
+  `Modifier.clickable(indication = null)`); **forbidden** to use Material3 `TextButton` /
+  `Button` / `IconButton` directly inside dialogs, and forbidden to use button components with built-in press animations.
+- Clickable components in the dialog body (input fields, list items, switches, radio buttons, etc.) must disable click feedback:
+  - Area level: wrap the outside with `CompositionLocalProvider(LocalIndication provides NoIndication)` (`NoIndication` is provided by `ui/common`);
+  - Point level: explicitly pass `indication = null` to `Modifier.clickable`;
+  - Shared item components: `AppNavItem` explicitly passes `indication = null`.
+- Dismiss-on-scrim-click already has `indication = null` built into `AppAlertDialog`; callers need not handle it.
 
-### 2. 现有调用点（新增场景照此对齐）
+### 2. Existing Call Sites (align new scenarios with these)
 
-| 场景 | 位置 | 处理方式 |
+| Scenario | Location | Treatment |
 | --- | --- | --- |
-| Winlator / Web 端口等文本值弹窗（全局） | `ui/settings/SettingsScreen.kt` | `DialogTextButton` + 输入区包 `NoIndication` |
-| 单游戏覆盖文本弹窗（Winlator 容器、Web 端口等） | `ui/settings/PerGameSettingsScreen.kt`（`OverrideText`） | `DialogTextButton` + 输入区包 `NoIndication` |
-| 添加 PC 游戏弹窗 | `ui/game/PcGameAddDialog.kt` | `DialogTextButton` + 行内 `indication = null` |
+| Winlator / Web port and other text-value dialogs (global) | `ui/settings/SettingsScreen.kt` | `DialogTextButton` + input area wrapped in `NoIndication` |
+| Per-game override text dialogs (Winlator container, Web port, etc.) | `ui/settings/PerGameSettingsScreen.kt` (`OverrideText`) | `DialogTextButton` + input area wrapped in `NoIndication` |
+| Add PC game dialog | `ui/game/PcGameAddDialog.kt` | `DialogTextButton` + inline `indication = null` |
 
-### 3. 页内按钮（同一意图，非弹窗）
+### 3. In-Page Buttons (same intent, not dialogs)
 
-`AppScreenScaffold` 的 `WithoutPressIndication` 只影响走 `LocalIndication` 的组件；Material3 的
-`Button` / `TextButton` 内部显式使用 `ripple()`，**不受其约束**。页内需要无按压反馈的按钮统一使用
-`ui/common/NoPressFeedbackButtons.kt`：
+`WithoutPressIndication` in `AppScreenScaffold` only affects components that go through `LocalIndication`; Material3's
+`Button` / `TextButton` explicitly use `ripple()` internally and are **not affected by it**. In-page buttons that need no press feedback uniformly use
+`ui/common/NoPressFeedbackButtons.kt`:
 
-- 填充按钮：`NoRippleButton`（`tonal = true` 为浅底次级样式，可用于「前往授权」类动作）；
-- 文本按钮：`NoRippleTextButton`。
+- Filled buttons: `NoRippleButton` (`tonal = true` is the light-background secondary style, usable for actions like "go to authorization");
+- Text buttons: `NoRippleTextButton`.
 
-| 场景 | 位置 | 组件 |
+| Scenario | Location | Component |
 | --- | --- | --- |
-| 解包 / 封包页（授权 / 选择目录 / 解包 / 封包 / 重新扫描 / 更换目录） | `ui/archive/ArchiveUnpackActivity.kt` | `NoRippleButton` / `NoRippleTextButton` |
+| Unpack / pack page (authorize / choose directory / unpack / pack / rescan / change directory) | `ui/archive/ArchiveUnpackActivity.kt` | `NoRippleButton` / `NoRippleTextButton` |
 
-### 4. 存量对齐
+### 4. Aligning Existing Code
 
-其余既有弹窗（`GameScreen`、`LaunchErrorDialog`、`CoverScraperSettingsActivity` 等仍有 Material
-`TextButton`）与页内 M3 `Button` 按「改动即对齐」迁移：任何页面/弹窗被修改时，须同步替换为无点击反馈实现。
-
-***
-
-## 主题色调统一使用规范
-
-应用主题色（primary）由用户通过 **应用设置 → 色调轮盘** 修改，必须全局统一生效。规范如下：
-
-### 1. 主题色的唯一定义与入口
-
-- 全局主题色唯一状态：`com.tyranor.next.theme.AppThemeColors.primary`（`mutableStateOf`，变化即触发全 App 重组）。
-
-- 持久化：`com.tyranor.next.core.settings.AppSettingsStore`（独立 prefs 文件 `app_settings`，key `theme_color`，默认 `#307DEF`）。
-
-- 修改主题色的唯一入口：持久化后调用 `AppThemeColors.refresh(context)`；任何页面不得自行修改 `primary`。
-
-- `TyranorNextTheme`（Material 页面）与 `MiuixSettingsTheme`（Miuix 页面）的 `primaryColor` 参数**必须为** **`Color? = null`**，并在**函数体内**以 `val primary = primaryColor ?: AppThemeColors.primary` 读取全局主题色；两个主题函数都必须标注 `@NonSkippableComposable`（配合函数体内读取，保证轮盘切换时主题必然重组、全局同步变色，不依赖调用点对默认参数表达式的订阅）。内部均会先 `ensureLoaded` 从存储加载，禁止传入写死颜色。
-
-### 2. 页面如何获取主题色
-
-- **Material 页面**（首页/游戏/引擎等 Tab、存档管理、在线补丁等 Activity）：统一使用 `MaterialTheme.colorScheme.primary`（选中态图标/文字、按钮、开关、输入框聚焦指示等）。
-
-- **Miuix 页面**（设置页/引擎设置/单游戏设置/应用设置等）：统一使用 `MiuixTheme.colorScheme.primary`（Preference 图标、Slider、Switch、下拉选中等）。
-
-- 图标 tint、高亮文字、选中态等一切"强调色"位置只能从上述 colorScheme 获取，**禁止**在页面里硬编码 `Color(0x...)`、`#307DEF`、`Blue40` 或任何品牌蓝。
-
-### 3. 中性色与语义色（固定，不属于主题色）
-
-以下颜色固定不变，从 `theme/Color.kt` 常量引用，**禁止**在页面中直接写 `Color(0x...)`：
-
-- `PageGrey` 页面背景色、`NavWhite` 卡片/导航栏组件色；二者由应用设置「色调切换」控制是否互换。`TextColor` 正文深灰、`UnselectedGrey` 导航栏未选中灰。
-
-- 语义色：`colorScheme.error`（错误/删除）、引擎封面色（`EngineType.coverColor()`）、封面占位白字等。
-
-- **主题色实底组件**（背景为不透明 `primary` 的按钮/徽标等）内的文字与图标**固定使用白色**（`Color.White`），
-  **禁止**使用 `MaterialTheme.colorScheme.onPrimary` 等会随主题色变化的跟随色；浅底（primary 加透明度）
-  的次级样式才使用主题色文字。
-
-- 新增任何颜色先检查 `Color.kt` 是否已有现成常量；中性色必须统一收口到 `Color.kt`，不在页面内散落硬编码。
-
-### 3.5 组件容器/背景色的色调跟随
-
-组件（卡片、列表项、弹窗内容项、设置项容器等）的背景色**不得依赖**
-`colorScheme.surface*` / `surfaceContainer` 等 scheme 颜色来自动跟随色调切换——这些 scheme
-颜色可能被主题函数固定写死（如 `MiuixSettingsTheme` 深浅色分支都设为 `NavWhite`），且弹窗等
-`Dialog` 组合可能不在目标 Miuix/Material 主题作用域内，导致背景色不随「外观模式 / 色调切换」变化。
-
-统一做法：需要随「色调切换」变色的组件容器，**直接引用** **`theme/Color.kt`** **的计算常量**（`get()`
-读取 `AppThemeColors.isDark` / `toneSwitchEnabled` 的 snapshot state，变化即触发重组）：
-
-- 卡片/导航栏/组件容器（含弹窗背景） → `NavWhite`
-
-- 弹窗内的条目容器（如 `AppNavItem` 传 `containerColor = DialogItemSurface`、手写条目行用
-  `DialogItemSurface`） → 与弹窗背景形成对偶反差
-
-- **玻璃系外观风格（应用设置 → 外观风格 = 复古玻璃 / 高级玻璃）**：页面背景固定深色画面
-  （复古 = 黑灰渐变 + 主题色对角环境光；高级 = 游戏封面拼贴的盒式模糊底图 + 压暗 + 暗角，
-  见 `ui/common/glass/AmbientBackdrop.kt` 与 `theme/AdvancedGlassStyle.kt`），
-  `PageGrey` 透明、`TextColor` 恒浅色；卡片/条目/弹窗/输入框统一 0.5dp 发丝描边（`Modifier.glassBorder()`，
-  高级玻璃为「上亮下暗」渐变描边并可在面板上叠 `Modifier.glassSpecular()` 顶边高光），
-  高级玻璃卡片为浅色磨砂膜（14% 白），弹窗/抽屉面板为 `rememberAdvancedGlassPanelSurface()` 从页面背景取色的渐变（不得写死灰色；抽屉渐变必须画在内容层，外层 modifier 会因 anchors 布局偏移而错位）。
-  此模式下「外观模式」
-  与「色调切换」不可用（置灰），色调轮盘保持可用（兜底色斑随主题色变化）。
-  高级玻璃的绘制是独立实现（`theme/AdvancedGlassStyle.kt`），复古玻璃的 `GlassStyle.kt` 不参与其材质；
-  新增组件必须走动态常量与 `glassBorder`，不得硬编码玻璃色值。真 backdrop 采样仅限白名单
-  （液态玻璃底栏、透镜底栏、高级玻璃悬浮默认导航条、悬浮按钮导航的主子按钮）；弹窗/抽屉是独立窗口，**无法**采样主窗口内容，
-  只能用背景取色渐变 + 遮罩 + 光学描边，不要为它们接 backdrop。
-
-- **底部抽屉/面板（`ModalBottomSheet`）→ 按「页面灰底」处理**：`ModalBottomSheet` 的 `containerColor` 通常取 `colorScheme.background`（浅/深随色调切换，等同页面背景），因此抽屉内条目（`AppNavItem` 等）必须传 `NavWhite`（灰底白卡），**不要**套用「弹窗白底灰卡」用 `PageGrey`——否则 item 与抽屉背景同色融为一体（如游戏操作抽屉 GameActionsSheet）。
-
-- **游戏操作抽屉（`GameActionsSheet`）关闭拖拽手势**：统一传 `sheetGesturesEnabled = false`，只允许遮罩/返回键关闭。
-  原因：M3 `ModalBottomSheet` 的关闭判定是「位移 > 56dp 或速度 > 125dp/s」任一命中即关闭（`BottomSheetDefaults`
-  的 `PositionalThreshold` / `VelocityThreshold`，1.4.0 起 `rememberModalBottomSheetState` 不暴露这两个阈值），
-  且列表到顶后的剩余手势/惯性会转交抽屉，导致用户"滑动稍微快一点"就误关抽屉。新增抽屉照此对齐；
-  内容滚动与条目点击不受影响。
-
-- 页面背景 → `PageGrey`
-
-- 文字 → `TextColor`
-
-通过 `MiuixTheme`/`MaterialTheme` 的 `colorScheme` 取容器背景属于**反例**（例：弹窗内项目用
-`MiuixTheme.colorScheme.surfaceContainer` 不会随色调切换变色，应改用 `theme/Color.kt` 对应容器常量——
-页面条目 `NavWhite`、弹窗内条目 `DialogItemSurface`）。
-仅当某 scheme 颜色确为实时计算且随色调切换变化时才允许引用。
-
-### 4. 层级要求
-
-- 任何页面根组件必须包在 `TyranorNextTheme {}` 或 `MiuixSettingsTheme {}` 内，且主题必须最外层（Activity `setContent` 中包裹）。
-
-- `MiuixSettingsTheme` 只提供 Miuix 主题，页面内部若用到 `MaterialTheme.*`（如弹窗、typography），外层仍须有 `TyranorNextTheme`（所有现有 Activity 均已满足，新增页面须遵循）。
-
-- XML / drawable 资源中**禁止**出现主题色（启动图标等除外）。
+The remaining existing dialogs (`GameScreen`, `LaunchErrorDialog`, `CoverScraperSettingsActivity`, etc. still have Material
+`TextButton`) and in-page M3 `Button`s migrate under "align on touch": whenever any page/dialog is modified, it must be replaced with the no-click-feedback implementation in the same change.
 
 ***
 
-## 测试与审核
+## Unified Theme Color Usage Rules
 
-必须让Agent使用阅读 Android CLI 中的审查技能
+The app theme color (primary) is modified by the user through **App settings → Color wheel** and must take effect globally and uniformly. The rules are as follows:
 
-应由多个相互独立的 Agent 或 子Agent 从不同角度重新检查代码，例如：
-代码逻辑审核：检查实现逻辑、状态流转、边界条件以及潜在逻辑错误。
-架构审核：检查模块职责、依赖关系、代码耦合以及是否破坏现有架构。
-代码健壮性审核：检查异常处理、空值、资源释放、线程安全、生命周期以及极端输入。
-回归风险审核：分析修改是否可能影响现有功能、其他引擎或既有调用链。
-代码规范审核：检查代码风格、命名、重复代码、无效代码以及是否符合 AGENTS.md 和项目现有规范。
+### 1. The Single Definition and Entry Point of the Theme Color
+
+- The single global theme color state: `com.tyranor.next.theme.AppThemeColors.primary` (`mutableStateOf`; a change triggers app-wide recomposition).
+
+- Persistence: `com.tyranor.next.core.settings.AppSettingsStore` (separate prefs file `app_settings`, key `theme_color`, default `#307DEF`).
+
+- The single entry point for modifying the theme color: call `AppThemeColors.refresh(context)` after persisting; no page may modify `primary` itself.
+
+- The `primaryColor` parameter of `TyranorNextTheme` (Material pages) and `MiuixSettingsTheme` (Miuix pages) **must be** **`Color? = null`**, and the global theme color must be read **inside the function body** with `val primary = primaryColor ?: AppThemeColors.primary`; both theme functions must be annotated `@NonSkippableComposable` (combined with reading inside the function body, this guarantees the theme recomposes whenever the wheel changes and the color syncs globally, without relying on call sites subscribing to the default parameter expression). Both load from storage via `ensureLoaded` first; passing hardcoded colors is forbidden.
+
+### 2. How Pages Obtain the Theme Color
+
+- **Material pages** (Home/Games/Engine tabs, save management, online patches and other Activities): uniformly use `MaterialTheme.colorScheme.primary` (selected icons/text, buttons, switches, input field focus indicators, etc.).
+
+- **Miuix pages** (settings page/engine settings/per-game settings/app settings etc.): uniformly use `MiuixTheme.colorScheme.primary` (Preference icons, Slider, Switch, dropdowns, etc.).
+
+- Every "accent color" spot such as icon tint, highlighted text, and selected state can only come from the above colorSchemes; **forbidden** to hardcode `Color(0x...)`, `#307DEF`, `Blue40`, or any brand blue in a page.
+
+### 3. Neutral and Semantic Colors (fixed, not theme colors)
+
+The following colors are fixed and referenced from `theme/Color.kt` constants; **forbidden** to write `Color(0x...)` directly in a page:
+
+- `PageGrey` page background color, `NavWhite` card/navigation bar component color; whether the two swap is controlled by the app setting "Tone switching". `TextColor` body dark grey, `UnselectedGrey` navigation bar unselected grey.
+
+- Semantic colors: `colorScheme.error` (error/delete), engine cover color (`EngineType.coverColor()`), cover placeholder white text, etc.
+
+- Text and icons inside **theme-color solid components** (buttons/badges whose background is an opaque `primary`) **use white fixed** (`Color.White`);
+  **forbidden** to use following colors such as `MaterialTheme.colorScheme.onPrimary` that change with the theme color; only light-background (primary plus opacity)
+  secondary styles use theme-color text.
+
+- Before adding any color, first check whether `Color.kt` already has a ready constant; neutral colors must be consolidated into `Color.kt` and not scattered as hardcoded values in pages.
+
+### 3.5 Tone Following for Component Containers/Backgrounds
+
+The background color of components (cards, list items, dialog content items, settings item containers, etc.) **must not depend on**
+scheme colors such as `colorScheme.surface*` / `surfaceContainer` to automatically follow tone switching — those scheme
+colors may be hardcoded by the theme functions (e.g. both the light and dark branches of `MiuixSettingsTheme` are set to `NavWhite`), and `Dialog` compositions such as dialogs
+may not be inside the target Miuix/Material theme scope, causing the background color not to change with "appearance mode / tone switching".
+
+Unified approach: component containers that need to change color with "tone switching" must **directly reference** the **computed constants of `theme/Color.kt`** (`get()`
+reads the snapshot state of `AppThemeColors.isDark` / `toneSwitchEnabled`; a change triggers recomposition):
+
+- Cards/navigation bar/component containers (including dialog backgrounds) → `NavWhite`
+
+- Item containers inside dialogs (e.g. `AppNavItem` with `containerColor = DialogItemSurface`, hand-written item rows using
+  `DialogItemSurface`) → contrast dual to the dialog background
+
+- **Glass appearance styles (App settings → Appearance style = Retro Glass / Advanced Glass)**: the page background is a fixed dark scene
+  (retro = black-grey gradient + theme-color diagonal ambient light; advanced = boxed blurred backdrop collaged from game covers + dimming + vignette,
+  see `ui/common/glass/AmbientBackdrop.kt` and `theme/AdvancedGlassStyle.kt`),
+  `PageGrey` is transparent, `TextColor` is always light; cards/items/dialogs/input fields uniformly use a 0.5dp hairline stroke (`Modifier.glassBorder()`;
+  advanced glass uses a "bright top, dark bottom" gradient stroke and can overlay `Modifier.glassSpecular()` top-edge highlight on panels),
+  advanced glass cards are light frosted film (14% white), and dialog/drawer panels are gradients sampled from the page background by `rememberAdvancedGlassPanelSurface()` (must not hardcode grey; the drawer gradient must be drawn on the content layer, because an outer modifier would be misaligned due to anchors layout offset).
+  In this mode "appearance mode"
+  and "tone switching" are unavailable (greyed out), and the color wheel stays available (the fallback color patches follow the theme color).
+  Advanced glass drawing is an independent implementation (`theme/AdvancedGlassStyle.kt`); retro glass's `GlassStyle.kt` does not participate in its material;
+  new components must go through dynamic constants and `glassBorder` and must not hardcode glass color values. True backdrop sampling is limited to the whitelist
+  (Liquid Glass bottom bar, Lens bottom bar, Advanced Glass floating default navigation bar, main and child buttons of floating button navigation); dialogs/drawers are separate windows and **cannot** sample the main window content,
+  so they can only use background-sampled gradients + scrim + optical stroke; do not wire backdrop for them.
+
+- **Bottom drawer/panel (`ModalBottomSheet`) → treated as "page grey base"**: `ModalBottomSheet`'s `containerColor` usually takes `colorScheme.background` (light/dark follows tone switching, equal to the page background), so items inside the drawer (`AppNavItem` etc.) must pass `NavWhite` (grey base with white card), and must **not** apply the "white dialog, grey card" pattern with `PageGrey` — otherwise the item merges into the drawer background (e.g. the game actions drawer GameActionsSheet).
+
+- **Game actions drawer (`GameActionsSheet`) disables the drag gesture**: uniformly pass `sheetGesturesEnabled = false`, allowing closing only via scrim/back key.
+  Reason: M3 `ModalBottomSheet`'s dismissal rule is "displacement > 56dp or velocity > 125dp/s", any of which dismisses it (`BottomSheetDefaults`'
+  `PositionalThreshold` / `VelocityThreshold`; since 1.4.0 `rememberModalBottomSheetState` does not expose these two thresholds),
+  and the leftover gesture/inertia after the list reaches the top is handed over to the drawer, causing the drawer to be dismissed accidentally when the user "swipes a bit fast". New drawers align with this;
+  content scrolling and item clicks are unaffected.
+
+- Page background → `PageGrey`
+
+- Text → `TextColor`
+
+Taking a container background from `MiuixTheme`/`MaterialTheme`'s `colorScheme` is a **counter-example** (e.g. using
+`MiuixTheme.colorScheme.surfaceContainer` for an item inside a dialog does not change color with tone switching; use the corresponding `theme/Color.kt` container constant instead —
+page items `NavWhite`, dialog items `DialogItemSurface`).
+Only when a scheme color is genuinely computed in real time and changes with tone switching may it be referenced.
+
+### 4. Layering Requirements
+
+- Any page root component must be wrapped in `TyranorNextTheme {}` or `MiuixSettingsTheme {}`, and the theme must be outermost (wrapped in the Activity's `setContent`).
+
+- `MiuixSettingsTheme` only provides the Miuix theme; if a page internally uses `MaterialTheme.*` (e.g. dialogs, typography), `TyranorNextTheme` is still required outside (all existing Activities satisfy this; new pages must follow).
+
+- The theme color **must not appear** in XML / drawable resources (except launch icons etc.).
 
 ***
 
-## 构建
+## Testing and Review
 
-- 构建命令：`./gradlew assembleDebug --no-daemon`
+The Agent must use the review skills in the Android CLI.
 
-- 使用 Android CLI（`--sdk=/tmp/androidsdk`）安装到实机。
+Multiple mutually independent Agents or sub-Agents should re-check the code from different angles, for example:
+Code logic review: check the implementation logic, state transitions, boundary conditions, and potential logic errors.
+Architecture review: check module responsibilities, dependency relationships, code coupling, and whether the existing architecture is broken.
+Code robustness review: check exception handling, null values, resource release, thread safety, lifecycle, and extreme inputs.
+Regression risk review: analyze whether the change may affect existing features, other engines, or existing call chains.
+Code convention review: check code style, naming, duplicated code, dead code, and whether it complies with AGENTS.md and the project's existing conventions.
 
-- 发版规则（issue #79）：只修改 `app/build.gradle.kts` 的 `appVersionName`；`versionCode` 由 `versionCodeOf()` 自动推导
-  （`major*1_000_000 + minor*1_000 + patch`，minor/patch 必须 < 1000），禁止手写或回退 `versionCode`。
-  beta-release workflow 会前置校验 versionCode 严格递增，并在构建后核对 APK 实际 versionCode（不一致即失败）。
+***
 
+## Build
+
+- Build command: `./gradlew assembleDebug --no-daemon`
+
+- Use the Android CLI (`--sdk=/tmp/androidsdk`) to install onto a real device.
+
+- Release rules (issue #79): only modify `appVersionName` in `app/build.gradle.kts`; `versionCode` is derived automatically by `versionCodeOf()`
+  (`major*1_000_000 + minor*1_000 + patch`, minor/patch must be < 1000); hand-writing or rolling back `versionCode` is forbidden.
+  The beta-release workflow pre-validates that versionCode strictly increases, and after the build verifies the APK's actual versionCode (a mismatch fails the build).
+
+***
+
+## Localization (i18n)
+
+Supported in-app languages: **English (default)**, **Bahasa Indonesia**, **Simplified Chinese**, **Japanese**, plus `Follow system`.
+
+- App strings: `app/src/main/res/values/strings.xml` (English default), `values-in`, `values-zh`, `values-ja`.
+- Engine strings: `engine/src/main/res/values/strings.xml` (English default), `values-in`, `values-zh`, `values-ja`.
+- Keep every language file key-complete; `tools/check-hardcoded-ui-strings.py` (Gradle `:app:checkHardcodedUiStrings`) enforces parity and blocks CJK string literals in Kotlin.
+- Engine host UI (Kotlin/Java in `engine`) must resolve text through `com.core.engine.EngineUiText.get(...)` so it follows the launcher language; the app passes `LaunchContract.UI_LANGUAGE_TAG`.
+- Never hardcode display text in Kotlin/Java; add a key to all four language files instead.
+- Language selection: `AppSettingsStore.LANGUAGE_*` + `AppLocaleController`; the default is `en`.
+
+## Git commit conventions
+
+- Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <summary>`.
+  Allowed types: `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `build`, `ci`, `chore`, `style`, `revert`.
+- **Commit messages must be written in English** (subject and body), even when the discussion is in another language.
+- Subject: imperative mood, lowercase after the type, no trailing period, at most 72 characters.
+- Scope is optional but recommended (e.g. `i18n`, `engine`, `settings`, `cover`, `save`, `docs`).
+- One logical change per commit; do not mix unrelated refactors with behavior changes.
+- Reference issues in the body (`Refs: #123`) rather than stuffing them into the subject.

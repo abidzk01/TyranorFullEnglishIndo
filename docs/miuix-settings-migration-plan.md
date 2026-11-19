@@ -1,41 +1,42 @@
-# 设置页 Miuix 化改造实施方案
+# Settings Page Miuix Migration Implementation Plan
 
-> 目标：引入 `miuix-preference` 依赖，用 Miuix 的 `Card + BasicComponent（Preference 系列）` 体系
-> 替换 `SettingsScreen.kt` 中的现有设置列表项，使设置页获得 HyperOS（MIUI）风格视觉与交互。
+> Goal: introduce the `miuix-preference` dependency and replace the existing settings list items in
+> `SettingsScreen.kt` with Miuix's `Card + BasicComponent (Preference family)` system, so the settings
+> page gains a HyperOS (MIUI)-style look and interaction.
 
 ---
 
-## 1. 背景与现状
+## 1. Background and Current State
 
-### 1.1 现有实现（改造前）
+### 1.1 Existing Implementation (before the migration)
 
-文件：`app/src/main/java/com/tyranor/next/ui/settings/SettingsScreen.kt`
+File: `app/src/main/java/com/tyranor/next/ui/settings/SettingsScreen.kt`
 
-| 现有组件 | 作用 | 视觉 |
+| Existing component | Purpose | Visual |
 |---|---|---|
-| `SettingsEntryCard` | 设置入口卡片（4 个引擎入口） | M3 `Card` + `RoundedCornerShape(8dp)` + `NavWhite`，手写 chevron |
-| `ListSwitch` | 开关行 | M3 `Row` + `Switch`，手动 clickable |
-| `SingleChoiceRow` | 单选行 | M3 `Row` + `AppAlertDialog` + `RadioButton` 弹窗选择 |
-| `FontRow` | 字体选择行 | M3 `Row` + `AppAlertDialog` 二选一弹窗 |
-| `EngineCard` | 引擎详情分组容器 | M3 `Card` 8dp 圆角 |
+| `SettingsEntryCard` | Settings entry card (4 engine entries) | M3 `Card` + `RoundedCornerShape(8dp)` + `NavWhite`, hand-written chevron |
+| `ListSwitch` | Switch row | M3 `Row` + `Switch`, manual clickable |
+| `SingleChoiceRow` | Single-choice row | M3 `Row` + `AppAlertDialog` + `RadioButton` dialog selection |
+| `FontRow` | Font selection row | M3 `Row` + `AppAlertDialog` binary choice dialog |
+| `EngineCard` | Engine detail grouping container | M3 `Card` with 8dp rounded corners |
 
-痛点：组件手写、样式与 HyperOS 风格差距大；单选交互需弹窗 + 单选钮，层级深。
+Pain points: the components are hand-written and stylistically far from HyperOS; single-choice interaction requires a dialog plus radio buttons, which is a deep hierarchy.
 
-### 1.2 Miuix 体系（参考 KernelSU-Style-UI-Kit 与 miuix 0.9.2 源码）
+### 1.2 The Miuix System (referencing KernelSU-Style-UI-Kit and the miuix 0.9.2 source)
 
-- `BasicComponent`：所有设置项的地基 —— 最小高 56dp、三栏布局（startAction / 标题+summary / endActions）、
-  整行可点、按压态反馈、endActions 最宽占 60%。
-- `SwitchPreference` / `ArrowPreference` / `OverlayDropdownPreference` 等由 `BasicComponent` 派生。
-- `Card`：超椭圆（squircle）圆角默认 16dp，`surfaceContainer` 底色，一组相关设置共用一张卡。
-- `OverlayDropdownPreference` 依赖 miuix `Scaffold` 提供的 `MiuixPopupHost`（`renderInRootScaffold`）。
+- `BasicComponent`: the foundation of every settings item — minimum height 56dp, three-column layout (startAction / title+summary / endActions),
+  the whole row is clickable, press-state feedback, and endActions take at most 60% of the width.
+- `SwitchPreference` / `ArrowPreference` / `OverlayDropdownPreference` and others derive from `BasicComponent`.
+- `Card`: superellipse (squircle) rounded corners default to 16dp, `surfaceContainer` background color, and a group of related settings shares one card.
+- `OverlayDropdownPreference` depends on the `MiuixPopupHost` provided by miuix `Scaffold` (`renderInRootScaffold`).
 
-## 2. 依赖引入
+## 2. Dependency Introduction
 
-`gradle/libs.versions.toml`：
+`gradle/libs.versions.toml`:
 
 ```toml
 [versions]
-androidxComposeBom = "2026.05.01"   # 由 2026.03.01 升级，与 miuix 0.9.2 传递依赖对齐
+androidxComposeBom = "2026.05.01"   # upgraded from 2026.03.01 to align with miuix 0.9.2 transitive dependencies
 miuix = "0.9.2"
 
 [libraries]
@@ -43,110 +44,110 @@ miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui-android", version.ref = "m
 miuix-preference = { module = "top.yukonga.miuix.kmp:miuix-preference-android", version.ref = "miuix" }
 ```
 
-`app/build.gradle.kts`：
+`app/build.gradle.kts`:
 
 ```kotlin
 implementation(libs.miuix.ui)
 implementation(libs.miuix.preference)
 ```
 
-**版本说明（已验证）**：
-- miuix 0.9.2 传递依赖 `kotlin-stdlib 2.4.0`、`org.jetbrains.compose.foundation:foundation:1.11.1`、
-  `miuix-core-android`、`miuix-squircle-android`、`miuix-shader-android`（均来自 Maven Central，当前仓库配置已含 mavenCentral）。
-- Compose BOM 升至 2026.05.01，避免 BOM 旧版本与 foundation 1.11.1 混用导致 ABI 不一致
-  （该组合与 KernelSU-Style-UI-Kit 生产验证组合一致）。
-- Kotlin 保持 2.3.20：Kotlin 元数据支持向前一个次版本读取（2.3.20 可读 2.4.0 元数据），构建已验证通过。
+**Version notes (verified)**:
+- miuix 0.9.2 transitively depends on `kotlin-stdlib 2.4.0`, `org.jetbrains.compose.foundation:foundation:1.11.1`,
+  `miuix-core-android`, `miuix-squircle-android`, and `miuix-shader-android` (all from Maven Central; the current repository configuration already includes mavenCentral).
+- The Compose BOM is raised to 2026.05.01 to avoid an ABI mismatch caused by mixing an older BOM with foundation 1.11.1
+  (this combination matches the combination validated in production by KernelSU-Style-UI-Kit).
+- Kotlin stays at 2.3.20: Kotlin metadata supports reading one minor version ahead (2.3.20 can read 2.4.0 metadata), and the build has been verified to pass.
 
-**构建链升级（实施中实际落地）**：
+**Build chain upgrade (actually implemented during the migration)**:
 
-miuix 0.9.2 的 `miuix-squircle-android` / `miuix-shader-android` 等模块硬性要求 **compileSdk 37**，
-因此同步升级（与参考项目完全一致的组合）：
+Modules such as `miuix-squircle-android` / `miuix-shader-android` in miuix 0.9.2 hard-require **compileSdk 37**,
+so they were upgraded in sync (the exact same combination as the reference project):
 
-| 项 | 原值 | 新值 |
+| Item | Old value | New value |
 |---|---|---|
 | compileSdk (app) | `compileSdk = 36` | `compileSdk { version = release(37) { minorApiLevel = 0 } }` |
 | AGP | 9.0.1 | 9.2.1 |
 | Gradle Wrapper | 9.1.0 | 9.5.1 |
-| targetSdk / minSdk | 36 / 26 | 不变 |
-| engine 模块 compileSdk | 36 | 不变（无 miuix 依赖） |
+| targetSdk / minSdk | 36 / 26 | unchanged |
+| engine module compileSdk | 36 | unchanged (no miuix dependency) |
 
-## 3. 组件映射（核心设计）
+## 3. Component Mapping (core design)
 
-| 原组件 | 新组件（miuix） | 说明 |
+| Original component | New component (miuix) | Notes |
 |---|---|---|
-| `SettingsEntryCard`（M3 Card） | `Card` + `ArrowPreference` | 4 个引擎入口合并进 1 张卡，带 `startAction` 图标 |
-| `ListSwitch` | `SwitchPreference` | 整行点击切换，HyperOS 胶囊开关 |
-| `SingleChoiceRow`（弹窗+RadioButton） | `OverlayDropdownPreference` | 点击展开覆盖式下拉浮层，选中即回填；替代深弹窗 |
-| `FontRow` | `ArrowPreference` + `endActions` 显示当前字体 | 二选一弹窗保留原 `AppAlertDialog`（符合 8dp 白色弹窗规范） |
-| `EngineCard` | miuix `Card` | 白底 squircle 卡片，header 保留 |
+| `SettingsEntryCard` (M3 Card) | `Card` + `ArrowPreference` | The 4 engine entries are merged into 1 card, with a `startAction` icon |
+| `ListSwitch` | `SwitchPreference` | The whole row toggles on click, HyperOS capsule switch |
+| `SingleChoiceRow` (dialog + RadioButton) | `OverlayDropdownPreference` | Tap to expand an overlay dropdown layer; selecting immediately writes the value back, replacing the deep dialog |
+| `FontRow` | `ArrowPreference` + `endActions` showing the current font | The binary choice dialog keeps the original `AppAlertDialog` (complying with the 8dp white dialog standard) |
+| `EngineCard` | miuix `Card` | White squircle card, header preserved |
 
-### 3.1 选项数据结构调整
+### 3.1 Option Data Structure Adjustment
 
-原 `Map<String, String>` 改为 `List<Pair<String, String>>`（保序）：
+The original `Map<String, String>` becomes `List<Pair<String, String>>` (order-preserving):
 
-- 为「值可能为空（=引擎默认）」的选项显式补充 `"" to "引擎默认"` 条目
-  （软件/OpenGL 纹理压缩、内存用量、FPS 限制），选择该项写回空串，语义与原“未设置”一致；
-- 线程数、纹理尺寸补充 `"" to "自动"` 作为首项兜底。
+- For options whose "value may be empty (= engine default)", explicitly add a `"" to "Engine default"` entry
+  (software/OpenGL texture compression, memory usage, FPS limit); selecting that item writes back an empty string, with the same semantics as the original "not set";
+- For thread count and texture size, add `"" to "Auto"` as the first fallback item.
 
-### 3.2 主题适配（保持 App 固定浅色风格）
+### 3.2 Theme Adaptation (keeping the app's fixed light style)
 
-新建 `theme/MiuixSettingsTheme.kt`：
+Create `theme/MiuixSettingsTheme.kt`:
 
 ```kotlin
 private val TyranorMiuixLightColors = lightColorScheme(
-    primary = Blue40,          // #307DEF，与应用主色一致
-    background = PageGrey,     // 页面背景与其他 Tab 一致
+    primary = Blue40,          // #307DEF, consistent with the app's primary color
+    background = PageGrey,     // page background, consistent with the other tabs
     surface = PageGrey,
-    surfaceContainer = NavWhite, // 组件/卡片色，由「色调切换」控制
+    surfaceContainer = NavWhite, // component/card color, controlled by "Tone switch"
     onBackground = TextColor,
     onSurface = TextColor,
     onSurfaceContainer = TextColor,
 )
 ```
 
-仅在设置相关界面局部包裹 `MiuixSettingsTheme { ... }`，不影响其他页面。
+Wrap only the settings-related screens locally with `MiuixSettingsTheme { ... }`, leaving other pages unaffected.
 
-### 3.3 页面结构（遵守 AGENTS.md 顶部栏规范）
+### 3.3 Page Structure (following the AGENTS.md top bar standard)
 
 ```
 MiuixSettingsTheme
-└── miuix Scaffold（containerColor = PageGrey；popupHost 默认提供 MiuixPopupHost）
-    ├── topBar = Column(statusBarsPadding) + Row(64dp, titleLarge)   ← 结构与现有完全一致
+└── miuix Scaffold(containerColor = PageGrey; popupHost provides MiuixPopupHost by default)
+    ├── topBar = Column(statusBarsPadding) + Row(64dp, titleLarge)   ← structure identical to the existing one
     └── LazyColumn(horizontal = 12.dp, spacedBy(12.dp))
-        ├── Card { ArrowPreference × 4（入口）/ SwitchPreference · DropdownPreference（详情） }
-        └── 底部导航栏高度占位
+        ├── Card { ArrowPreference × 4 (entries) / SwitchPreference · DropdownPreference (details) }
+        └── placeholder for the bottom navigation bar height
 ```
 
-- `contentWindowInsets = WindowInsets(0.dp)`，内边距全部手动控制（沿用现有行为，避免重复 inset）。
+- `contentWindowInsets = WindowInsets(0.dp)`, with all padding controlled manually (following the existing behavior to avoid duplicate insets).
 
-## 4. 与 AGENTS.md 规范的差异说明
+## 4. Differences from the AGENTS.md Standards
 
-| 规范条目 | 本次处理 |
+| Standard item | Handling in this change |
 |---|---|
-| 顶部栏 Column + 64dp、透明、statusBarsPadding | ✅ 保持不变（miuix Scaffold 仅作容器） |
-| 禁用 Material3 TopAppBar/Scaffold | ✅ 未使用 M3 Scaffold；miuix Scaffold 为下拉浮层宿主所需 |
-| 卡片圆角统一 8dp | ⚠️ 设置页改用 Miuix 默认 16dp squircle（Miuix 风格核心特征），其他页面维持 8dp |
-| 弹窗白底 8dp | ✅ 字体选择弹窗保留 `AppAlertDialog`；新增的下拉浮层为 Miuix 原生样式 |
-| 页面切换：主 Tab 水平移动 / Activity 上进下出 | ✅ 不变 |
+| Top bar Column + 64dp, transparent, statusBarsPadding | ✅ Unchanged (the miuix Scaffold is used only as a container) |
+| Material3 TopAppBar/Scaffold prohibited | ✅ No M3 Scaffold used; the miuix Scaffold is required as the host for the dropdown overlay |
+| Card corner radius uniformly 8dp | ⚠️ The settings page switches to Miuix's default 16dp squircle (a core characteristic of the Miuix style); other pages keep 8dp |
+| Dialog white background, 8dp | ✅ The font selection dialog keeps `AppAlertDialog`; the newly added dropdown overlay uses the native Miuix style |
+| Page transitions: main tabs horizontal movement / Activities enter upward, exit downward | ✅ Unchanged |
 
-## 5. 实施步骤
+## 5. Implementation Steps
 
-1. [x] 调研 miuix 0.9.2 API（已完成：AAR 反编译验证 `lightColorScheme`/`MiuixTheme(colors)`/`Card`/`Scaffold`/Preference 签名）
-2. [x] `libs.versions.toml`：BOM 升级 + miuix 版本与库声明 + AGP 9.2.1
-3. [x] `app/build.gradle.kts`：添加 miuix 依赖 + compileSdk 37 DSL
-4. [x] 新建 `theme/MiuixSettingsTheme.kt`
-5. [x] 重写 `SettingsScreen.kt`（`SettingsScreen` 入口 + `EngineSettingsDetailScreen` 详情；删除 `ListSwitch`/`SingleChoiceRow` 手写组件）
-6. [x] `./gradlew assembleDebug --no-daemon` 构建验证（BUILD SUCCESSFUL，产出 app-debug.apk）
-7. [x] 修复记录：① compileSdk 36→37 + AGP/Gradle 升级（miuix 硬性要求）；② `SwitchPreference` 尾随 lambda 改为显式 `onCheckedChange = { }`（其末参数非函数类型）
+1. [x] Investigate the miuix 0.9.2 API (done: AAR decompilation verified `lightColorScheme`/`MiuixTheme(colors)`/`Card`/`Scaffold`/Preference signatures)
+2. [x] `libs.versions.toml`: BOM upgrade + miuix version and library declarations + AGP 9.2.1
+3. [x] `app/build.gradle.kts`: add the miuix dependencies + compileSdk 37 DSL
+4. [x] Create `theme/MiuixSettingsTheme.kt`
+5. [x] Rewrite `SettingsScreen.kt` (`SettingsScreen` entry + `EngineSettingsDetailScreen` details; delete the hand-written `ListSwitch`/`SingleChoiceRow` components)
+6. [x] `./gradlew assembleDebug --no-daemon` build verification (BUILD SUCCESSFUL, app-debug.apk produced)
+7. [x] Fix log: 1. compileSdk 36→37 + AGP/Gradle upgrade (a hard requirement of miuix); 2. `SwitchPreference` trailing lambda changed to an explicit `onCheckedChange = { }` (its last parameter is not a function type)
 
-## 6. 验收标准
+## 6. Acceptance Criteria
 
-- 构建通过，APK 可安装；
-- 设置页：单卡 4 个引擎入口（带图标 + 右箭头），Miuix 视觉（白卡、16dp squircle、56dp 行高、胶囊开关）；
-- 引擎详情：开关行为、下拉选择、字体选择、保存逻辑与改造前完全等价（写盘字段不变）；
-- 顶部栏结构、页面切换动画与其他 Tab 视觉一致性不受影响。
+- The build passes and the APK can be installed;
+- Settings page: a single card with 4 engine entries (with icons + right chevrons), Miuix look (white card, 16dp squircle, 56dp row height, capsule switches);
+- Engine details: switch behavior, dropdown selection, font selection, and save logic are fully equivalent to before the migration (the persisted fields are unchanged);
+- The top bar structure, page transition animations, and visual consistency with the other tabs are unaffected.
 
-## 7. 后续可选扩展（不在本次范围）
+## 7. Optional Follow-up Extensions (out of scope for this change)
 
-- `PerGameSettingsScreen` / `SaveManagementActivity` 同体系改造；
-- 引入 `overScrollVertical` / `scrollEndHaptic` / 顶部栏滚动渐变等 Miuix 滚动体验。
+- Migrate `PerGameSettingsScreen` / `SaveManagementActivity` to the same system;
+- Introduce Miuix scrolling experience features such as `overScrollVertical` / `scrollEndHaptic` / top bar scroll gradient.
