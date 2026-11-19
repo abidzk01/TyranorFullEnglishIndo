@@ -9,6 +9,7 @@ import com.core.input.InputSink
 import com.core.input.PadProfile
 import com.core.input.VirtualPadEditPanel
 import com.core.input.VirtualPadView
+import com.tyranor.next.core.i18n.AppLocaleController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -102,6 +103,9 @@ class PadEditorHost private constructor(
             val profile = withContext(Dispatchers.IO) {
                 InputRemapRepository.readProfile(context, profileId)
             } ?: return null
+            // 编辑器复用 engine 的原生面板,文案走 getString:这里换成 App 语言上下文,
+            // 否则页面跟随系统语言而不是 App 内语言。
+            val uiContext = AppLocaleController.wrap(context)
             val palette = EngineThemeColors.Palette(
                 primary = primaryColor,
                 onPrimary = onPrimaryColor,
@@ -110,12 +114,12 @@ class PadEditorHost private constructor(
                 textMuted = 0,
             )
 
-            val pad = VirtualPadView(context, PreviewSink).apply {
+            val pad = VirtualPadView(uiContext, PreviewSink).apply {
                 theme = VirtualPadView.PadTheme(primaryColor, onPrimaryColor)
                 this.profile = profile
                 setPadVisible(true)
             }
-            val root = FrameLayout(context).apply {
+            val root = FrameLayout(uiContext).apply {
                 addView(
                     pad,
                     FrameLayout.LayoutParams(
@@ -126,7 +130,7 @@ class PadEditorHost private constructor(
             }
             val panel = VirtualPadEditPanel.attach(
                 parent = root,
-                context = context,
+                context = uiContext,
                 pad = pad,
                 theme = palette,
                 onSave = { pad.commitEdit() },

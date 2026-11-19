@@ -24,6 +24,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import com.core.engine.EngineThemeColors
+import com.core.engine.EngineUiText
 import com.core.engine.R
 import kotlin.math.min
 
@@ -73,7 +74,7 @@ class VirtualPadEditPanel(
             setPadding(0, dp(2f), 0, dp(6f))
         }
         textInput = EditText(context).apply {
-            hint = context.getString(R.string.engine_input_button_text)
+            hint = EngineUiText.get(context, R.string.engine_input_button_text)
             inputType = InputType.TYPE_CLASS_TEXT
             setTextColor(Color.WHITE)
             setHintTextColor(0x88FFFFFF.toInt())
@@ -99,7 +100,7 @@ class VirtualPadEditPanel(
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (!suppressCallbacks && fromUser) {
                     pad.setSelectedSizePercent(progress)
-                    sizeLabel.text = context.getString(R.string.engine_input_size, progress)
+                    sizeLabel.text = EngineUiText.get(context, R.string.engine_input_size, progress)
                 }
             }
 
@@ -108,21 +109,21 @@ class VirtualPadEditPanel(
         })
 
         autoKeepBox = CheckBox(context).apply {
-            text = context.getString(R.string.engine_input_auto_keep)
+            text = EngineUiText.get(context, R.string.engine_input_auto_keep)
             setTextColor(Color.WHITE)
             textSize = 12f
         }
         autoKeepBox.setOnCheckedChangeListener { _, _ -> applyButtonEdit() }
 
         visibleBox = CheckBox(context).apply {
-            text = context.getString(R.string.engine_input_visible)
+            text = EngineUiText.get(context, R.string.engine_input_visible)
             setTextColor(Color.WHITE)
             textSize = 12f
         }
         visibleBox.setOnCheckedChangeListener { _, _ -> applyVisibilityEdit() }
 
         eightDirBox = CheckBox(context).apply {
-            text = context.getString(R.string.engine_input_eight_dir)
+            text = EngineUiText.get(context, R.string.engine_input_eight_dir)
             setTextColor(Color.WHITE)
             textSize = 12f
         }
@@ -134,12 +135,12 @@ class VirtualPadEditPanel(
             pad.updateSelectedDirection(checked, info.up, info.down, info.left, info.right)
         }
 
-        keysButton = pillButton(context.getString(R.string.engine_input_pick_keys))
+        keysButton = pillButton(EngineUiText.get(context, R.string.engine_input_pick_keys))
         keysButton.setOnClickListener { showKeyDialog() }
 
         // 方向控件的键位同样可编辑（四个方向各一组，空 = 该方向不输出）
         directionKeysTitle = TextView(context).apply {
-            text = context.getString(R.string.engine_input_direction_keys_title)
+            text = EngineUiText.get(context, R.string.engine_input_direction_keys_title)
             setTextColor(Color.WHITE)
             textSize = 12f
             setPadding(0, dp(8f), 0, 0)
@@ -158,7 +159,7 @@ class VirtualPadEditPanel(
             "right" to R.string.engine_input_direction_right,
         ).forEach { (dir, labelRes) ->
             directionButtons.addView(
-                pillButton(context.getString(labelRes)).apply {
+                pillButton(EngineUiText.get(context, labelRes)).apply {
                     setOnClickListener { showDirectionKeyDialog(dir) }
                 },
                 LinearLayout.LayoutParams(0, dp(32f), 1f).apply {
@@ -173,13 +174,13 @@ class VirtualPadEditPanel(
             setPadding(0, dp(8f), 0, 0)
         }
         actionRow.addView(
-            pillButton(context.getString(R.string.engine_input_add)).apply {
+            pillButton(EngineUiText.get(context, R.string.engine_input_add)).apply {
                 setOnClickListener { showAddDialog() }
             },
             pillParams(end = dp(3f)),
         )
         actionRow.addView(
-            pillButton(context.getString(R.string.engine_input_duplicate)).apply {
+            pillButton(EngineUiText.get(context, R.string.engine_input_duplicate)).apply {
                 setOnClickListener {
                     // 只有「达上限」才提示原因；未选中或选中方向控件时该动作本就不适用
                     // （静默即可，否则会给出与实际原因不符的提示）
@@ -187,7 +188,8 @@ class VirtualPadEditPanel(
                     if (!duplicated && pad.isButtonLimitReached()) {
                         Toast.makeText(
                             context,
-                            context.getString(
+                            EngineUiText.get(
+                                context,
                                 R.string.engine_input_button_limit,
                                 PadProfile.MAX_PAD_BUTTONS,
                             ),
@@ -200,7 +202,7 @@ class VirtualPadEditPanel(
             pillParams(start = dp(1f), end = dp(1f)),
         )
         actionRow.addView(
-            pillButton(context.getString(R.string.engine_input_delete)).apply {
+            pillButton(EngineUiText.get(context, R.string.engine_input_delete)).apply {
                 setOnClickListener { pad.deleteSelected(); refresh() }
             },
             pillParams(start = dp(3f)),
@@ -211,19 +213,19 @@ class VirtualPadEditPanel(
             setPadding(0, dp(6f), 0, 0)
         }
         commitRow.addView(
-            pillButton(context.getString(R.string.engine_input_reset)).apply {
+            pillButton(EngineUiText.get(context, R.string.engine_input_reset)).apply {
                 setOnClickListener { pad.resetToDefaults(); refresh() }
             },
             pillParams(end = dp(3f)),
         )
         commitRow.addView(
-            pillButton(context.getString(R.string.engine_input_cancel)).apply {
+            pillButton(EngineUiText.get(context, R.string.engine_input_cancel)).apply {
                 setOnClickListener { onCancel() }
             },
             pillParams(start = dp(3f), end = dp(3f)),
         )
         commitRow.addView(
-            pillButton(context.getString(R.string.engine_input_save), primary = true).apply {
+            pillButton(EngineUiText.get(context, R.string.engine_input_save), primary = true).apply {
                 setOnClickListener {
                     applyButtonEdit()
                     onSave()
@@ -268,7 +270,7 @@ class VirtualPadEditPanel(
             }
             boundId = currentId
             if (info == null) {
-                selectionView.text = context.getString(R.string.engine_input_select_hint)
+                selectionView.text = EngineUiText.get(context, R.string.engine_input_select_hint)
                 textInput.isEnabled = false
                 sizeSeek.isEnabled = false
                 keysButton.isEnabled = false
@@ -278,7 +280,7 @@ class VirtualPadEditPanel(
                 return
             }
             val direction = info.isDirection
-            selectionView.text = context.getString(R.string.engine_input_selected, info.label)
+            selectionView.text = EngineUiText.get(context, R.string.engine_input_selected, info.label)
             textInput.isEnabled = !direction
             sizeSeek.isEnabled = true
             keysButton.isEnabled = true
@@ -296,7 +298,7 @@ class VirtualPadEditPanel(
             visibleBox.visibility = View.VISIBLE
             visibleBox.isChecked = info.visible
             sizeSeek.progress = info.sizePercent.coerceIn(2, 60)
-            sizeLabel.text = context.getString(R.string.engine_input_size, info.sizePercent)
+            sizeLabel.text = EngineUiText.get(context, R.string.engine_input_size, info.sizePercent)
             keysButton.visibility = if (direction) View.GONE else View.VISIBLE
             val directionVisibility = if (direction) View.VISIBLE else View.GONE
             directionKeysTitle.visibility = directionVisibility
@@ -311,13 +313,13 @@ class VirtualPadEditPanel(
     /** 方向键位的可读摘要（未绑定的方向显示「未绑定」）。 */
     private fun directionSummary(info: VirtualPadView.SelectionInfo): String =
         listOf(
-            context.getString(R.string.engine_input_direction_up) to info.up,
-            context.getString(R.string.engine_input_direction_down) to info.down,
-            context.getString(R.string.engine_input_direction_left) to info.left,
-            context.getString(R.string.engine_input_direction_right) to info.right,
+            EngineUiText.get(context, R.string.engine_input_direction_up) to info.up,
+            EngineUiText.get(context, R.string.engine_input_direction_down) to info.down,
+            EngineUiText.get(context, R.string.engine_input_direction_left) to info.left,
+            EngineUiText.get(context, R.string.engine_input_direction_right) to info.right,
         ).joinToString("　") { (label, keys) ->
             val text = if (keys.isEmpty()) {
-                context.getString(R.string.engine_input_binding_empty)
+                EngineUiText.get(context, R.string.engine_input_binding_empty)
             } else {
                 keys.joinToString("+") { key ->
                     InputKeyCatalog.label(context, key).ifBlank { key.toString() }
@@ -397,42 +399,43 @@ class VirtualPadEditPanel(
         commitPendingText()
         val limitReached = pad.isButtonLimitReached()
         val directionAvailable = pad.canAdd(VirtualPadView.NewButtonType.DIRECTION)
-        val buttonUnavailableReason = context.getString(
+        val buttonUnavailableReason = EngineUiText.get(
+            context,
             R.string.engine_input_button_limit,
             PadProfile.MAX_PAD_BUTTONS,
         )
-        val directionUnavailableReason = context.getString(R.string.engine_input_direction_exists)
+        val directionUnavailableReason = EngineUiText.get(context, R.string.engine_input_direction_exists)
         val options = listOf(
             Triple(
-                context.getString(R.string.engine_input_new_button),
+                EngineUiText.get(context, R.string.engine_input_new_button),
                 VirtualPadView.NewButtonType.BUTTON,
                 if (limitReached) buttonUnavailableReason else null,
             ),
             Triple(
-                context.getString(R.string.engine_input_new_round_button),
+                EngineUiText.get(context, R.string.engine_input_new_round_button),
                 VirtualPadView.NewButtonType.ROUND_BUTTON,
                 if (limitReached) buttonUnavailableReason else null,
             ),
             Triple(
-                context.getString(R.string.engine_input_new_screenshot),
+                EngineUiText.get(context, R.string.engine_input_new_screenshot),
                 VirtualPadView.NewButtonType.SCREENSHOT,
                 if (limitReached) buttonUnavailableReason else null,
             ),
             Triple(
-                context.getString(R.string.engine_input_new_direction),
+                EngineUiText.get(context, R.string.engine_input_new_direction),
                 VirtualPadView.NewButtonType.DIRECTION,
                 if (directionAvailable) null else directionUnavailableReason,
             ),
         )
         val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        list.addView(dialogTitle(context.getString(R.string.engine_input_add)))
+        list.addView(dialogTitle(EngineUiText.get(context, R.string.engine_input_add)))
         options.forEach { (label, type, unavailableReason) ->
             val available = unavailableReason == null
             val row = TextView(context).apply {
                 text = if (available) {
                     label
                 } else {
-                    context.getString(R.string.engine_input_unavailable_format, label, unavailableReason)
+                    EngineUiText.get(context, R.string.engine_input_unavailable_format, label, unavailableReason)
                 }
                 setTextColor(if (available) Color.WHITE else 0x66FFFFFF)
                 textSize = 14f
@@ -495,7 +498,7 @@ class VirtualPadEditPanel(
         InputKeyCatalog.groups().forEach { group ->
             grid.addView(
                 TextView(context).apply {
-                    text = context.getString(group.titleRes)
+                    text = EngineUiText.get(context, group.titleRes)
                     setTextColor(0xFFB9BDC6.toInt())
                     textSize = 11f
                     setPadding(dp(2f), dp(10f), 0, dp(4f))
@@ -505,7 +508,7 @@ class VirtualPadEditPanel(
                 val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
                 chunk.forEach { entry ->
                     val chip = keyChip(
-                        label = entry.label ?: context.getString(entry.labelRes),
+                        label = entry.label ?: EngineUiText.get(context, entry.labelRes),
                         selected = entry.code in selected,
                     )
                     chip.setOnClickListener {
@@ -535,7 +538,7 @@ class VirtualPadEditPanel(
         }
 
         val rootLayout = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        rootLayout.addView(dialogTitle(context.getString(titleRes)))
+        rootLayout.addView(dialogTitle(EngineUiText.get(context, titleRes)))
         // 键位网格固定高度（内容更高时由 ScrollView 滚动）：
         // 卡片整体是 wrap_content，若这里用 weight 会让网格塌成 0 高度
         val gridHeight = min((context.resources.displayMetrics.heightPixels * 0.52f).toInt(), dp(380f))
@@ -551,13 +554,13 @@ class VirtualPadEditPanel(
             setPadding(0, dp(10f), 0, 0)
         }
         buttonRow.addView(
-            pillButton(context.getString(R.string.engine_input_cancel)).apply {
+            pillButton(EngineUiText.get(context, R.string.engine_input_cancel)).apply {
                 setOnClickListener { dismissDialog() }
             },
             pillParams(end = dp(4f)),
         )
         buttonRow.addView(
-            pillButton(context.getString(R.string.engine_input_confirm), primary = true).apply {
+            pillButton(EngineUiText.get(context, R.string.engine_input_confirm), primary = true).apply {
                 setOnClickListener {
                     onConfirm(selected.toList())
                     dismissDialog()

@@ -26,6 +26,7 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import com.core.engine.DoubleBackExit
 import com.core.engine.EnginePrefs
+import com.core.engine.EngineUiText
 import com.core.engine.EngineSessionRegistry
 import com.core.engine.EngineThemeColors
 import com.core.engine.LaunchContract
@@ -130,7 +131,7 @@ class RpgMakerActivity : Activity() {
         Log.i(TAG, "onCreate gameDir=$gameDir")
         val resolvedGameDir = gameDir
         if (resolvedGameDir.isNullOrBlank()) {
-            failLaunch(getString(R.string.engine_rpgmaker_empty_game_directory))
+            failLaunch(EngineUiText.get(this, R.string.engine_rpgmaker_empty_game_directory))
             return
         }
 
@@ -144,7 +145,7 @@ class RpgMakerActivity : Activity() {
             val resourcesAsar = File(File(gameRoot, "resources"), "app.asar")
             val index = File(gameRoot, "index.html")
             Log.e(TAG, "entry not found index=${index.absolutePath} app.asar=${rootAsar.absolutePath} resources/app.asar=${resourcesAsar.absolutePath} (searched subdirs: ${WEB_ENTRY_SUBDIRS.joinToString()})")
-            failLaunch(getString(R.string.engine_rpgmaker_entry_not_found))
+            failLaunch(EngineUiText.get(this, R.string.engine_rpgmaker_entry_not_found))
             return
         }
         val contentRoot = entry.contentRoot
@@ -158,7 +159,7 @@ class RpgMakerActivity : Activity() {
                 asarArchive = AsarArchive(File(requireNotNull(asarPath)))
             } catch (error: Throwable) {
                 Log.e(TAG, "open asar failed", error)
-                failLaunch(getString(R.string.engine_rpgmaker_asar_unreadable))
+                failLaunch(EngineUiText.get(this, R.string.engine_rpgmaker_asar_unreadable))
                 return
             }
         }
@@ -172,7 +173,7 @@ class RpgMakerActivity : Activity() {
         val saves = resolveSaveDirectory(intent, gameRoot)
         saveDirectory = saves
         if (!ensureWritableSaveDirectory(saves)) {
-            failLaunch(getString(R.string.engine_rpgmaker_unwritable_save_directory))
+            failLaunch(EngineUiText.get(this, R.string.engine_rpgmaker_unwritable_save_directory))
             return
         }
         Log.i(TAG, "save directory=${saves?.absolutePath ?: "none"} scoped=${intent.getBooleanExtra(LaunchContract.SCOPED_SAVE_DIR, false)}")
@@ -281,7 +282,7 @@ class RpgMakerActivity : Activity() {
             InjectionBundle(contentRoot, lateHook, scriptAppends, internalResources, nwPolyfill, modHtml, legacyRenderer)
         } catch (error: Throwable) {
             Log.e(TAG, "build injection bundle failed", error)
-            failLaunch(getString(R.string.engine_rpgmaker_server_failed))
+            failLaunch(EngineUiText.get(this, R.string.engine_rpgmaker_server_failed))
             null
         }
     }
@@ -300,7 +301,7 @@ class RpgMakerActivity : Activity() {
             }.also { it.start() }
         } catch (error: Throwable) {
             Log.e(TAG, "start local server failed", error)
-            failLaunch(getString(R.string.engine_rpgmaker_server_failed))
+            failLaunch(EngineUiText.get(this, R.string.engine_rpgmaker_server_failed))
         }
     }
 
@@ -782,6 +783,10 @@ class RpgMakerActivity : Activity() {
 
         @JavascriptInterface
         fun getState(): String = preferences.getString(gameId, null).orEmpty()
+
+        /** Launcher UI language tag; the in-game mod panel follows it. */
+        @JavascriptInterface
+        fun uiLanguage(): String = intent?.getStringExtra(LaunchContract.UI_LANGUAGE_TAG).orEmpty()
 
         @JavascriptInterface
         fun setState(raw: String?) {

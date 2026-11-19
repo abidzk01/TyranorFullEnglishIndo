@@ -32,6 +32,7 @@ import android.widget.TextView
 import android.widget.Toast
 import com.core.engine.DoubleBackExit
 import com.core.engine.EnginePrefs
+import com.core.engine.EngineUiText
 import com.core.engine.EngineSessionRegistry
 import com.core.engine.EngineThemeColors
 import com.core.engine.LaunchContract
@@ -107,7 +108,7 @@ class TyranoActivity : Activity() {
         Log.i(TAG, "onCreate gameDir=$gameDir")
         val resolvedGameDir = gameDir
         if (resolvedGameDir.isNullOrBlank()) {
-            failLaunch(getString(R.string.engine_tyrano_empty_game_directory))
+            failLaunch(EngineUiText.get(this, R.string.engine_tyrano_empty_game_directory))
             return
         }
 
@@ -122,7 +123,7 @@ class TyranoActivity : Activity() {
             val resourcesAsar = File(File(gameRoot, "resources"), "app.asar")
             val index = File(gameRoot, "index.html")
             Log.e(TAG, "entry not found index=${index.absolutePath} app.asar=${rootAsar.absolutePath} resources/app.asar=${resourcesAsar.absolutePath} (searched subdirs: ${WEB_ENTRY_SUBDIRS.joinToString()})")
-            failLaunch(getString(R.string.engine_tyrano_entry_not_found))
+            failLaunch(EngineUiText.get(this, R.string.engine_tyrano_entry_not_found))
             return
         }
         val contentRoot = entry.contentRoot
@@ -138,7 +139,7 @@ class TyranoActivity : Activity() {
                 asarArchive = AsarArchive(File(requireNotNull(asarPath)))
             } catch (error: Throwable) {
                 Log.e(TAG, "open asar failed", error)
-                failLaunch(getString(R.string.engine_tyrano_asar_unreadable))
+                failLaunch(EngineUiText.get(this, R.string.engine_tyrano_asar_unreadable))
                 return
             }
         }
@@ -154,7 +155,7 @@ class TyranoActivity : Activity() {
         val saves = if (needsSaveBridge) resolveSaveDirectory(intent, gameRoot) else null
         saveDirectory = saves
         if (needsSaveBridge && !ensureWritableSaveDirectory(saves)) {
-            failLaunch(getString(R.string.engine_tyrano_unwritable_save_directory))
+            failLaunch(EngineUiText.get(this, R.string.engine_tyrano_unwritable_save_directory))
             return
         }
         Log.i(TAG, "save directory=${saves?.absolutePath ?: "none"} scoped=${intent.getBooleanExtra(LaunchContract.SCOPED_SAVE_DIR, false)}")
@@ -207,7 +208,7 @@ class TyranoActivity : Activity() {
             }.also { it.start() }
         } catch (error: Throwable) {
             Log.e(TAG, "start local server failed", error)
-            failLaunch(getString(R.string.engine_tyrano_server_failed))
+            failLaunch(EngineUiText.get(this, R.string.engine_tyrano_server_failed))
             return
         }
 
@@ -268,7 +269,7 @@ class TyranoActivity : Activity() {
         if (server.usedFallbackPort) {
             Toast.makeText(
                 this,
-                getString(R.string.engine_web_shell_port_fallback, preferredPort, server.port),
+                EngineUiText.get(this, R.string.engine_web_shell_port_fallback, preferredPort, server.port),
                 Toast.LENGTH_LONG,
             ).show()
         }
@@ -560,9 +561,9 @@ class TyranoActivity : Activity() {
 
     private fun confirmReturnToTitle() {
         showEngineConfirm(
-            getString(R.string.engine_return_to_title),
-            getString(R.string.engine_return_to_title_message),
-            getString(R.string.engine_confirm),
+            EngineUiText.get(this, R.string.engine_return_to_title),
+            EngineUiText.get(this, R.string.engine_return_to_title_message),
+            EngineUiText.get(this, R.string.engine_confirm),
         ) {
             webView?.post { runCatching { webView?.reload() } }
         }
@@ -577,9 +578,9 @@ class TyranoActivity : Activity() {
      */
     private fun confirmExitGame() {
         showEngineConfirm(
-            getString(R.string.engine_exit_game),
-            getString(R.string.engine_exit_game_message),
-            getString(R.string.engine_confirm),
+            EngineUiText.get(this, R.string.engine_exit_game),
+            EngineUiText.get(this, R.string.engine_exit_game_message),
+            EngineUiText.get(this, R.string.engine_confirm),
         ) {
             finish()
         }
@@ -789,7 +790,7 @@ class TyranoActivity : Activity() {
 
         // 取消按钮：药丸形（card 底色 + primary 文字）
         val cancelBtn = TextView(this).apply {
-            text = getString(R.string.engine_cancel)
+            text = EngineUiText.get(this@TyranoActivity, R.string.engine_cancel)
             setTextColor(colors.primary)
             textSize = 13f
             setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -887,6 +888,12 @@ class TyranoActivity : Activity() {
     }
 
     inner class TyranoJsBridge(private val saveDirectory: File?) {
+        /** Launcher UI language tag; the injected menu follows it. */
+        @JavascriptInterface
+        fun uiLanguage(): String = intent?.getStringExtra(LaunchContract.UI_LANGUAGE_TAG)
+            ?.takeIf { it.isNotBlank() }
+            ?: resources.configuration.locales[0].language
+
         @JavascriptInterface
         fun closeGame() = runOnUiThread(::confirmExitGame)
 
@@ -935,6 +942,10 @@ class TyranoActivity : Activity() {
 
         @JavascriptInterface
         fun getState(): String = preferences.getString(gameId, null).orEmpty()
+
+        /** Launcher UI language tag; the in-game mod panel follows it. */
+        @JavascriptInterface
+        fun uiLanguage(): String = intent?.getStringExtra(LaunchContract.UI_LANGUAGE_TAG).orEmpty()
 
         @JavascriptInterface
         fun setState(raw: String?) {

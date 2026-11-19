@@ -15,6 +15,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import com.core.engine.EngineUiText
 
 /**
  * 虚拟按键覆盖层（可编辑）：渲染当前方案、收发按键、提供游戏内编辑交互。
@@ -799,7 +800,7 @@ class VirtualPadView(
             SelectionInfo(
                 id = id,
                 isDirection = true,
-                label = context.getString(com.core.engine.R.string.engine_input_direction),
+                label = EngineUiText.get(context, com.core.engine.R.string.engine_input_direction),
                 text = "",
                 visible = active.direction.visible,
                 sizePercent = (active.direction.size * 100f).roundToInt(),

@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
 import com.core.engine.EngineThemeColors
+import com.core.engine.EngineUiText
 import com.core.engine.R
 
 /**
@@ -131,7 +132,7 @@ class InputRemapController private constructor(
                 runCatching {
                     Toast.makeText(
                         activity,
-                        activity.getString(R.string.engine_input_save_failed),
+                        EngineUiText.get(activity, R.string.engine_input_save_failed),
                         Toast.LENGTH_LONG,
                     ).show()
                 }
@@ -383,9 +384,10 @@ class InputRemapController private constructor(
                             // 避免用户去相册找不到
                             val file = result.file
                             if (file.parentFile?.absolutePath == publicDir.absolutePath) {
-                                activity.getString(R.string.engine_input_screenshot_saved, file.absolutePath)
+                                EngineUiText.get(activity, R.string.engine_input_screenshot_saved, file.absolutePath)
                             } else {
-                                activity.getString(
+                                EngineUiText.get(
+                                    activity,
                                     R.string.engine_input_screenshot_saved_private,
                                     file.absolutePath,
                                 )
@@ -394,10 +396,10 @@ class InputRemapController private constructor(
 
                         // 连点：上一张仍在保存——给反馈而不是静默丢弃
                         ScreenCapture.CaptureResult.Busy ->
-                            activity.getString(R.string.engine_input_screenshot_busy)
+                            EngineUiText.get(activity, R.string.engine_input_screenshot_busy)
 
                         ScreenCapture.CaptureResult.Failed ->
-                            activity.getString(R.string.engine_input_screenshot_failed)
+                            EngineUiText.get(activity, R.string.engine_input_screenshot_failed)
                     }
                     // Toast 不依赖窗口令牌，用 applicationContext 更稳（且不再持有 Activity）
                     runCatching {

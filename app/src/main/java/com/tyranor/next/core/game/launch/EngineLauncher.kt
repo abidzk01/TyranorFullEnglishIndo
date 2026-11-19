@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.res.Resources
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -61,6 +62,7 @@ import com.tyranor.next.core.game.storage.GameLibraryFacade
 import com.tyranor.next.core.game.storage.EngineDetectionRepository
 import com.tyranor.next.core.game.scan.GameDirFingerprint
 import com.tyranor.next.core.input.InputRemapRepository
+import com.tyranor.next.core.settings.AppSettingsStore
 import com.tyranor.next.core.settings.EffectiveEngineSettings
 import com.tyranor.next.core.settings.EngineSettingsResolver
 import com.tyranor.next.core.settings.EngineSettingsStore
@@ -875,6 +877,16 @@ object EngineLauncher {
         intent.putExtra(LaunchContract.THEME_COLOR_CARD, theme.cardArgb)
         intent.putExtra(LaunchContract.THEME_COLOR_TEXT, theme.textArgb)
         intent.putExtra(LaunchContract.THEME_COLOR_TEXT_MUTED, theme.mutedArgb)
+        // Engine shell Android resources follow the in-app language. For "system",
+        // read the real system locale so an earlier Locale.setDefault from
+        // AppLocaleController cannot leak the previously selected language.
+        val appLanguage = AppSettingsStore.getLanguage(context)
+        val uiLanguageTag = if (appLanguage == AppSettingsStore.LANGUAGE_SYSTEM) {
+            Resources.getSystem().configuration.locales[0].toLanguageTag()
+        } else {
+            appLanguage
+        }
+        intent.putExtra(LaunchContract.UI_LANGUAGE_TAG, uiLanguageTag)
         return intent
     }
 

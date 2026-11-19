@@ -67,6 +67,28 @@ setTimeout(function(){
 (function(){
 var player_back_cnt = 0;
 
+// UI language follows the launcher (injected by TyranoActivity).
+var uiLang = 'en';
+try {
+    if (window.appJsInterface && appJsInterface.uiLanguage) {
+        uiLang = String(appJsInterface.uiLanguage() || 'en').toLowerCase();
+    }
+} catch (e) { uiLang = 'en'; }
+var uiPack = uiLang.indexOf('id') === 0 ? 'id'
+    : uiLang.indexOf('zh') === 0 ? 'zh'
+    : uiLang.indexOf('ja') === 0 ? 'ja' : 'en';
+var TM = {
+    en: { menu: 'Menu', closeMenu: 'Close menu', returnTitle: 'Return to title', auto: 'Auto', skip: 'Skip',
+          save: 'Save', load: 'Load', exit: 'Exit', transparency: 'Opacity', size: 'Size' },
+    id: { menu: 'Menu', closeMenu: 'Tutup menu', returnTitle: 'Kembali ke judul', auto: 'Otomatis', skip: 'Lewati',
+          save: 'Simpan', load: 'Muat', exit: 'Keluar', transparency: 'Opasitas', size: 'Ukuran' },
+    zh: { menu: '菜单', closeMenu: '关闭菜单', returnTitle: '回到标题', auto: '自动', skip: '快进',
+          save: '存档', load: '读档', exit: '结束', transparency: '透明', size: '大小' },
+    ja: { menu: 'メニュー', closeMenu: 'メニューを閉じる', returnTitle: 'タイトルへ戻る', auto: 'オート', skip: 'スキップ',
+          save: 'セーブ', load: 'ロード', exit: '終了', transparency: '不透明度', size: 'サイズ' }
+};
+function T(key) { return (TM[uiPack] && TM[uiPack][key]) || TM.en[key] || key; }
+
 function loadCfg(k, d) {
     try { var r = $.getStorage(k); if (r == null || r === '') return d; return JSON.parse(r); }
     catch(e) { return d; }
@@ -92,7 +114,7 @@ var ct = $("<div id='player_menu_container' style='position:absolute;z-index:999
 
 // 收起态：圆按钮
 var jmb = $("<div class='player_menu_area' id='player_menu_button' style='display:none;opacity:" + mo + ";text-align:center;border-radius:50%;cursor:pointer;background-color:#007AFF;box-shadow:0 4px 14px rgba(0,0,0,0.35);'></div>");
-var jmbSpan = $("<span style='color:white;font-weight:bold;'>菜单</span>");
+var jmbSpan = $("<span style='color:white;font-weight:bold;'>" + T('menu') + "</span>");
 jmb.append(jmbSpan);
 
 // 展开面板 flex 列布局
@@ -104,21 +126,21 @@ function mkBtn(t, bg) {
     return d;
 }
 
-var jb = mkBtn('关闭菜单'); var je = mkBtn('回到标题');
-var ja = mkBtn('自动'); var js = mkBtn('快进');
-var jsv = mkBtn('存档'); var jl = mkBtn('读档');
-var jc = mkBtn('结束', '#0A84FF');
+var jb = mkBtn(T('closeMenu')); var je = mkBtn(T('returnTitle'));
+var ja = mkBtn(T('auto')); var js = mkBtn(T('skip'));
+var jsv = mkBtn(T('save')); var jl = mkBtn(T('load'));
+var jc = mkBtn(T('exit'), '#0A84FF');
 
 // 透明度行
 var oRow = $("<div style='padding:5px 8px;border-radius:12px;background-color:rgba(0,0,0,0.45);margin-bottom:6px;white-space:nowrap;text-align:center;'></div>");
-var oLbl = $("<span style='color:white;vertical-align:middle;margin-right:4px;'>透明</span>");
+var oLbl = $("<span style='color:white;vertical-align:middle;margin-right:4px;'>" + T('transparency') + "</span>");
 var oSli = $("<input type='range' min='5' max='100' value='" + Math.round(mo * 100) + "' style='vertical-align:middle;accent-color:#007AFF;'>");
 var oVal = $("<span style='color:#ccc;vertical-align:middle;margin-left:4px;'>" + Math.round(mo * 100) + "%</span>");
 oRow.append(oLbl, oSli, oVal);
 
 // 大小行
 var sRow = $("<div style='padding:5px 8px;border-radius:12px;background-color:rgba(0,0,0,0.45);margin-bottom:6px;white-space:nowrap;text-align:center;'></div>");
-var sLbl = $("<span style='color:white;vertical-align:middle;margin-right:4px;'>大小</span>");
+var sLbl = $("<span style='color:white;vertical-align:middle;margin-right:4px;'>" + T('size') + "</span>");
 var sSli = $("<input type='range' min='40' max='300' value='" + Math.round(ms * 100) + "' style='vertical-align:middle;accent-color:#007AFF;'>");
 var sVal = $("<span style='color:#ccc;vertical-align:middle;margin-left:4px;'>" + Math.round(ms * 100) + "%</span>");
 sRow.append(sLbl, sSli, sVal);

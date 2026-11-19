@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.KeyEvent
 import android.widget.Toast
 import com.core.engine.LaunchContract
+import com.core.engine.EngineUiText
 import com.core.engine.R
 
 open class ArtemisActivity : NativeActivity() {
@@ -108,7 +109,7 @@ open class ArtemisActivity : NativeActivity() {
         val oldPath = old.getStringExtra(LaunchContract.PATH)
         val newPath = intent.getStringExtra(LaunchContract.PATH)
         if (oldPath == null || oldPath == newPath || newPath == null) return
-        Toast.makeText(this, getString(R.string.engine_another_game_running), Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, EngineUiText.get(this, R.string.engine_another_game_running), Toast.LENGTH_SHORT).show()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
