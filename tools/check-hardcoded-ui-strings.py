@@ -3,18 +3,18 @@
 
 三条规则：
 
-1. 三语言 `strings.xml` 的键必须齐平（app 与 engine 各自内部齐平）；
+1. 各语言 `strings.xml` 的键必须齐平（app 与 engine 各自内部齐平）；
 2. Kotlin 源码不得出现含 CJK 的字符串字面量（界面文案必须走 `strings.xml`）；
 3. drawable / XML 资源不得出现主题色（由各自模块的规范约束，此处不覆盖）。
 
 engine 模块的扫描范围与边界：
 
-- `engine/src/main/res/values{,-en,-ja}/strings.xml`：参与键齐平校验；
+- `engine/src/main/res/values{,-zh,-ja,-in}/strings.xml`：参与键齐平校验；
 - `engine/src/main/java/**/*.kt`：参与 CJK 字面量扫描；
 - `engine/src/main/assets/**/*.js`：**不在扫描范围**。原因是这些脚本随游戏页面注入、不参与
   Android 资源本地化（无法用 `strings.xml` 供文案），因此它们的文案只能就地写。
   注意：这不代表其中没有界面文案——例如 `__rpgmaker_mod_ui.js` 的「虚拟按键」卡片就是
-  纯中文的游戏内 UI 文案；改动这些脚本时需人工保证三语言一致（引擎侧无法自动校验）。
+  纯中文的游戏内 UI 文案；改动这些脚本时需人工保证各语言一致（引擎侧无法自动校验）。
 - `engine/src/test/**` 同样不参与：测试里的中文是断言消息，不是界面文案。
 """
 from pathlib import Path
@@ -23,15 +23,16 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# (模块名, 源码根目录, [三语言 strings.xml])
+# (模块名, 源码根目录, [各语言 strings.xml])
 MODULES = [
     (
         "app",
         ROOT / "app" / "src" / "main" / "java",
         [
             ROOT / "app" / "src" / "main" / "res" / "values" / "strings.xml",
+            ROOT / "app" / "src" / "main" / "res" / "values-zh" / "strings.xml",
             ROOT / "app" / "src" / "main" / "res" / "values-ja" / "strings.xml",
-            ROOT / "app" / "src" / "main" / "res" / "values-en" / "strings.xml",
+            ROOT / "app" / "src" / "main" / "res" / "values-in" / "strings.xml",
         ],
     ),
     (
@@ -39,8 +40,9 @@ MODULES = [
         ROOT / "engine" / "src" / "main" / "java",
         [
             ROOT / "engine" / "src" / "main" / "res" / "values" / "strings.xml",
+            ROOT / "engine" / "src" / "main" / "res" / "values-zh" / "strings.xml",
             ROOT / "engine" / "src" / "main" / "res" / "values-ja" / "strings.xml",
-            ROOT / "engine" / "src" / "main" / "res" / "values-en" / "strings.xml",
+            ROOT / "engine" / "src" / "main" / "res" / "values-in" / "strings.xml",
         ],
     ),
 ]

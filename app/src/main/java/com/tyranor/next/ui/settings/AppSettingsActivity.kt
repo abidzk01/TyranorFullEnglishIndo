@@ -142,9 +142,10 @@ internal fun AppSettingsScreen() {
                         Column(Modifier.padding(vertical = 4.dp)) {
                             var language by remember { mutableStateOf(AppSettingsStore.getLanguage(ctx)) }
                             val languageModes = listOf(
+                                AppSettingsStore.LANGUAGE_EN to stringResource(R.string.settings_language_en),
+                                AppSettingsStore.LANGUAGE_ID to stringResource(R.string.settings_language_id),
                                 AppSettingsStore.LANGUAGE_ZH to stringResource(R.string.settings_language_zh),
                                 AppSettingsStore.LANGUAGE_JA to stringResource(R.string.settings_language_ja),
-                                AppSettingsStore.LANGUAGE_EN to stringResource(R.string.settings_language_en),
                                 AppSettingsStore.LANGUAGE_SYSTEM to stringResource(R.string.settings_language_system),
                             )
                             val languageIndex = languageModes.indexOfFirst { it.first == language }

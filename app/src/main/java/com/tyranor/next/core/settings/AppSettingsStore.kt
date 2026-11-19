@@ -79,11 +79,14 @@ object AppSettingsStore {
     /** App 内语言：日文。 */
     const val LANGUAGE_JA = "ja"
 
-    /** App 内语言：英文。 */
+    /** App 内语言:英文(默认)。 */
     const val LANGUAGE_EN = "en"
 
+    /** App 内语言:印尼文。 */
+    const val LANGUAGE_ID = "id"
+
     /** App 语言内存态：设置页切换后根 Composable 可即时重组。 */
-    val languageState: MutableStateFlow<String> = MutableStateFlow(LANGUAGE_ZH)
+    val languageState: MutableStateFlow<String> = MutableStateFlow(LANGUAGE_EN)
 
     /** 外观模式：浅色。 */
     const val THEME_MODE_LIGHT = "light"
@@ -266,7 +269,7 @@ object AppSettingsStore {
         prefs(c).edit().putString(KEY_THEME_COLOR, hex).apply()
 
     fun getLanguage(c: Context): String =
-        normalizeLanguage(prefs(c).getString(KEY_LANGUAGE, LANGUAGE_ZH))
+        normalizeLanguage(prefs(c).getString(KEY_LANGUAGE, LANGUAGE_EN))
 
     fun setLanguage(c: Context, language: String) {
         val normalized = normalizeLanguage(language)
@@ -573,10 +576,13 @@ object AppSettingsStore {
         coverScraperSettingsVersion.value += 1
     }
 
+    /** 语言归一:system / zh / ja / en / id 精确接受,其余(含空/未知)回退英文默认。 */
     private fun normalizeLanguage(language: String?): String = when (language) {
         LANGUAGE_SYSTEM -> LANGUAGE_SYSTEM
+        LANGUAGE_ZH -> LANGUAGE_ZH
         LANGUAGE_JA -> LANGUAGE_JA
         LANGUAGE_EN -> LANGUAGE_EN
-        else -> LANGUAGE_ZH
+        LANGUAGE_ID -> LANGUAGE_ID
+        else -> LANGUAGE_EN
     }
 }

@@ -9,7 +9,7 @@ import android.content.res.Resources
 import com.tyranor.next.core.settings.AppSettingsStore
 import java.util.Locale
 
-/** App 内语言控制器：默认中文，可切换日文/英文或跟随系统。 */
+/** App 内语言控制器:默认英文,可切换印尼文/中文/日文或跟随系统。 */
 object AppLocaleController {
 
     fun wrap(context: Context): Context =
@@ -32,6 +32,7 @@ object AppLocaleController {
         AppSettingsStore.LANGUAGE_ZH -> Locale.SIMPLIFIED_CHINESE
         AppSettingsStore.LANGUAGE_JA -> Locale.JAPANESE
         AppSettingsStore.LANGUAGE_EN -> Locale.ENGLISH
+        AppSettingsStore.LANGUAGE_ID -> Locale.forLanguageTag("id-ID")
         else -> null
     }
 
