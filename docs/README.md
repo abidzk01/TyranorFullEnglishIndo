@@ -1,81 +1,81 @@
-# docs 目录索引
+# docs Directory Index
 
-`docs/` 下的文档是专题方案与历史记录，保留生成时的上下文与结论；当前实现行为以仓库根 [SPEC.md](../SPEC.md) 与 [ARCHITECTURE.md](../ARCHITECTURE.md) 为准。文档未标注状态不代表其内容仍然有效，引用前请对照当前代码与上述两份文档。
+Documents in `docs/` are topic plans and records, preserving the context and conclusions at the time of creation. Current implementation behavior follows [SPEC.md](../SPEC.md) and [ARCHITECTURE.md](../ARCHITECTURE.md) in the repository root. Documents without status labels do not necessarily mean their content is still valid; cross-check with current code and the two documents above before referencing.
 
-本索引按类别列出 `docs/*.md`（不含 `docs/adr/`、`docs/reviews/`、`docs/skills/` 与本文件），子目录在末尾单独列出。
+This index lists `docs/*.md` by category (excluding `docs/adr/`, `docs/reviews/`, `docs/skills/`, and this file itself). Subdirectories are listed separately at the end.
 
-## 引擎接入
+## Engine Integration
 
-- [AVG32 / RealLive / UK2 三引擎接入方案（framebuffer 引擎组）](AVG32-RealLive-UK2引擎接入方案.md)
-- [Artemis 自动引擎识别优化计划方案](Artemis自动引擎识别优化计划方案.md)
-- [Artemis「添加基础补丁 / 添加Windows环境补丁」逆向分析](Artemis基础补丁与Windows环境补丁逆向分析.md)
-- [Artemis Ogg 音频兼容修复（Issue #111）](Artemis-Ogg音频兼容修复.md)
-- [BGI 存档读取修复实施计划](BGI宿主存档读取修复实施计划.md)
-- [CMVS（cmvs-rs）引擎接入方案](CMVS-cmvs-rs引擎接入方案.md)
-- [Ethornell / BGI（ethornell-rs）Android 化与内置引擎接入计划](Ethornell-BGI-Android化移植计划方案.md)
-- [Ethornell / BGI 宿主重构计划方案](Ethornell-BGI-宿主重构计划方案.md)
-- [FVPEngine（rfvp）内置引擎接入方案](FVP引擎接入方案.md)
-- [FVP 自定义字体（用户更换字体）接入方案](FVP自定义字体接入方案.md)
-- [PC 游戏类型接入方案（手动添加 + 外置 Winlator 启动）](PC游戏类型接入方案.md)
-- [SiglusEngine（siglus_rs）内置引擎接入方案](Siglus引擎接入方案.md)
-- [SoftPAL（sena-rs）引擎接入方案](SoftPAL-sena-rs引擎接入方案.md)
-- [System3.x（xsystem35-sdl2）内置引擎接入方案](System35-xsystem35-引擎接入方案.md)
-- [System4（xsystem4）内置引擎接入方案](System4-xsystem4-引擎接入方案.md)
-- [krkrsdl3 引擎壳配置能力清单与 TyranorNext 完善方案](krkrsdl3-engine-config-plan.md)
-- [Ren’Py 8.5.3 外置模块接入分析](renpy-8.5.3-module-analysis.md)
-- [外置 APK 引擎模块接入方案](外置APK引擎模块接入方案.md)
-- [外置 Ren'Py 模块配置接入引擎设置清单计划](外置RenPy模块配置接入引擎设置清单计划.md)
-- [外置 RPGM 模块配置接入引擎设置清单计划](外置RPGM模块配置接入引擎设置清单计划.md)
-- [外置 Ruffle 模块接入方案（SWF / Flash）](外置Ruffle模块接入方案.md)
-- [外置主机模拟器跳转接入方案（PPSSPP / Eden / Winlator）](外置主机模拟器跳转接入方案.md)
-- [第三方 APK 运行时模块接入方案（计划）](第三方APK运行时模块接入方案.md)
-- [第三方 APK 运行时模块接入指南](第三方APK运行时模块接入指南.md)
-- [第三方 APK 运行时模块单游戏引擎配置与存档管理计划](第三方APK运行时模块单游戏引擎配置计划.md)
-- [统一引擎宿主启动加载界面实施计划](统一引擎宿主启动加载界面实施计划.md)
-- [汉化补丁字体映射移植适配说明](汉化补丁字体映射移植适配说明.md)
+- [AVG32 / RealLive / UK2 Three-Engine Integration Plan (framebuffer engine group)](AVG32-RealLive-UK2引擎接入方案.md)
+- [Artemis Automatic Engine Recognition Optimization Plan](Artemis自动引擎识别优化计划方案.md)
+- [Artemis "Add Basic Patch / Add Windows Environment Patch" Reverse Analysis](Artemis基础补丁与Windows环境补丁逆向分析.md)
+- [Artemis Ogg Audio Compatibility Fix (Issue #111)](Artemis-Ogg音频兼容修复.md)
+- [BGI Save Loading Fix Implementation Plan](BGI宿主存档读取修复实施计划.md)
+- [CMVS (cmvs-rs) Engine Integration Plan](CMVS-cmvs-rs引擎接入方案.md)
+- [Ethornell / BGI (ethornell-rs) Android Port and Built-in Engine Integration Plan](Ethornell-BGI-Android化移植计划方案.md)
+- [Ethornell / BGI Host Refactoring Plan](Ethornell-BGI-宿主重构计划方案.md)
+- [FVPEngine (rfvp) Built-in Engine Integration Plan](FVP引擎接入方案.md)
+- [FVP Custom Font (User Font Replacement) Integration Plan](FVP自定义字体接入方案.md)
+- [PC Game Type Integration Plan (Manual Addition + External Winlator Launch)](PC游戏类型接入方案.md)
+- [SiglusEngine (siglus_rs) Built-in Engine Integration Plan](Siglus引擎接入方案.md)
+- [SoftPAL (sena-rs) Engine Integration Plan](SoftPAL-sena-rs引擎接入方案.md)
+- [System3.x (xsystem35-sdl2) Built-in Engine Integration Plan](System35-xsystem35-引擎接入方案.md)
+- [System4 (xsystem4) Built-in Engine Integration Plan](System4-xsystem4-引擎接入方案.md)
+- [krkrsdl3 Engine Shell Configuration Capability List and TyranorNext Improvement Plan](krkrsdl3-engine-config-plan.md)
+- [Ren'Py 8.5.3 External Module Integration Analysis](renpy-8.5.3-module-analysis.md)
+- [External APK Engine Module Integration Plan](外置APK引擎模块接入方案.md)
+- [External Ren'Py Module Configuration Integration Engine Settings List Plan](外置RenPy模块配置接入引擎设置清单计划.md)
+- [External RPGM Module Configuration Integration Engine Settings List Plan](外置RPGM模块配置接入引擎设置清单计划.md)
+- [External Ruffle Module Integration Plan (SWF / Flash)](外置Ruffle模块接入方案.md)
+- [External Host Emulator Jump Integration Plan (PPSSPP / Eden / Winlator)](外置主机模拟器跳转接入方案.md)
+- [Third-Party APK Runtime Module Integration Plan (Plan)](第三方APK运行时模块接入方案.md)
+- [Third-Party APK Runtime Module Integration Guide](第三方APK运行时模块接入指南.md)
+- [Third-Party APK Runtime Module Single-Game Engine Configuration and Save Management Plan](第三方APK运行时模块单游戏引擎配置计划.md)
+- [Unified Engine Host Launch Loading Interface Implementation Plan](统一引擎宿主启动加载界面实施计划.md)
+- [Localization Patch Font Mapping Porting Adaptation Notes](汉化补丁字体映射移植适配说明.md)
 
-## 架构与 UI
+## Architecture and UI
 
-- [设置页 Miuix 化改造实施方案](miuix-settings-migration-plan.md)
-- [三层架构目录归类优化方案](三层架构目录归类优化方案.md)
-- [TyranorNext App 内三语言文本切换支持计划方案](三语言文本切换支持计划方案.md)
-- [输入重映射与手柄映射方案（可编辑虚拟按键 + 手柄按键重映射）](输入重映射与手柄映射方案.md)
-- [平板侧栏导航适配方案](平板侧栏导航适配方案.md)
-- [应用层页面切换性能优化方案](应用层页面切换性能优化方案.md)
-- [TyranorNext 应用持久化存储迁移与性能优化计划方案](应用持久化存储迁移与性能优化计划方案.md)
-- [TyranorNext 架构优化整理方案](架构优化整理方案.md)
-- [玻璃风格主题计划方案](玻璃风格主题计划方案.md)
-- [液态玻璃增强计划方案](液态玻璃增强计划方案.md)
-- [高级玻璃外观风格计划方案（含「玻璃 → 复古玻璃」更名）](高级玻璃外观风格计划方案.md)
-- [滤镜纹理方向接口](graphics-filter-coordinates.md)
-- [共用画质滤镜链](graphics-filters.md)
-- [Kirikiroid2 1.2.6 与 krkrsdl3 的画质滤镜接入](krkr-local-raw-filters.md)
-- [VN-SR 滤镜集](vnsr-filters.md)
+- [Settings Page Miuix Migration Implementation Plan](miuix-settings-migration-plan.md)
+- [Three-Layer Architecture Directory Classification Optimization Plan](三层架构目录归类优化方案.md)
+- [TyranorNext App Multilingual Text Switching Support Plan](三语言文本切换支持计划方案.md)
+- [Input Remapping and Gamepad Mapping Plan (Editable Virtual Keys + Gamepad Key Remapping)](输入重映射与手柄映射方案.md)
+- [Tablet Sidebar Navigation Adaptation Plan](平板侧栏导航适配方案.md)
+- [Application Layer Page Switching Performance Optimization Plan](应用层页面切换性能优化方案.md)
+- [TyranorNext App Persistent Storage Migration and Performance Optimization Plan](应用持久化存储迁移与性能优化计划方案.md)
+- [TyranorNext Architecture Optimization Plan](架构优化整理方案.md)
+- [Glass Style Theme Plan](玻璃风格主题计划方案.md)
+- [Liquid Glass Enhancement Plan](液态玻璃增强计划方案.md)
+- [Advanced Glass Appearance Style Plan (including "Glass → Retro Glass" rename)](高级玻璃外观风格计划方案.md)
+- [Filter Texture Orientation Interface](graphics-filter-coordinates.md)
+- [Shared Image Quality Filter Chain](graphics-filters.md)
+- [Kirikiroid2 1.2.6 and krkrsdl3 Image Quality Filter Integration](krkr-local-raw-filters.md)
+- [VN-SR Filter Set](vnsr-filters.md)
 
-## 存档与网络
+## Saves and Network
 
-- [Web 壳固定端口与存档域（Tyrano / WebOther / VN）](Web壳固定端口与存档域.md)
-- [TyranorNext 应用持久化数据清单](应用持久化数据清单.md)
+- [Web Shell Fixed Port and Save Domain (Tyrano / WebOther / VN)](Web壳固定端口与存档域.md)
+- [TyranorNext App Persistent Data Inventory](应用持久化数据清单.md)
 
-## 工具与构建
+## Tools and Build
 
-- [RPG Maker MV/MZ 游戏修改器实施方案](RPGMaker修改器实施方案.md)
-- [XP3 拆封包功能方案（解包 / 封包独立工具页）](XP3拆封包功能方案.md)
+- [RPG Maker MV/MZ Game Modifier Implementation Plan](RPGMaker修改器实施方案.md)
+- [XP3 Unpack/Pack Function Plan (Unpack/Pack Independent Tool Page)](XP3拆封包功能方案.md)
 - [Native Plugin Release Hardening Plan](native-plugin-release-hardening-plan.md)
 
-## 验收 / 历史记录
+## Acceptance / History
 
-- [Ethornell 测试验收记录](Ethornell测试验收记录.md)
-- [WebDAV Android 设备验收记录](WebDAV-device-acceptance.md)
-- [应用层代码审查问题清单](应用层代码审查问题清单.md)
-- 游玩状态/四源绑定审计快照九份（`play-status-audit-20261114.md`、`play-status-audit-20261115.md`、`play-status-audit-20261115-cf56a52e.md`、`play-status-audit-20261115-post-cf56a52e.md`、`play-status-audit-20261115-r5.md`、`play-status-audit-20261115-r6.md`、`play-status-audit-20261116.md`、`play-status-audit-20261116-r8.md`、`play-status-audit-20261116-r9.md`）：分支 `codex/bangumi-vndb-play-status` 逐轮审计/修复记录；快照时效——每份仅对其标注的 HEAD 版本有效，当前行为以 SPEC.md 与 ARCHITECTURE.md 为准，跨轮汇总裁决以各轮汇总报告为准。
+- [Ethornell Test Acceptance Record](Ethornell测试验收记录.md)
+- [WebDAV Android Device Acceptance Record](WebDAV-device-acceptance.md)
+- [Application Layer Code Review Issue List](应用层代码审查问题清单.md)
+- Play status / four-source binding audit snapshots (nine files: `play-status-audit-20261114.md`, `play-status-audit-20261115.md`, `play-status-audit-20261115-cf56a52e.md`, `play-status-audit-20261115-post-cf56a52e.md`, `play-status-audit-20261115-r5.md`, `play-status-audit-20261115-r6.md`, `play-status-audit-20261116.md`, `play-status-audit-20261116-r8.md`, `play-status-audit-20261116-r9.md`): Branch `codex/bangumi-vndb-play-status` round-by-round audit/fix records; snapshot timeliness — each is valid only for its labeled HEAD version; current behavior follows SPEC.md and ARCHITECTURE.md, cross-round summary rulings follow each round's summary report.
 
 ## ADR
 
-- [0001 SDL2 运行库由 System35 与 System4 共用（libSDL2x + app32）](adr/0001-sdl2-shared-libsdl2x-app32.md)
-- [0002 内置原生引擎库以预构建 .so 入库，源码与修改声明放 fork](adr/0002-prebuilt-engine-libs-source-in-fork.md)
+- [0001 SDL2 runtime library shared by System35 and System4 (libSDL2x + app32)](adr/0001-sdl2-shared-libsdl2x-app32.md)
+- [0002 Built-in native engine libraries imported as prebuilt .so, source code and modification declarations placed in fork](adr/0002-prebuilt-engine-libs-source-in-fork.md)
 
-## 审核模板
+## Review Templates
 
-- [审核模板目录说明](reviews/README.md)
-- [PR 审核回复模板](reviews/PR-REVIEW-TEMPLATE.md)
+- [Review Template Directory Description](reviews/README.md)
+- [PR Review Response Template](reviews/PR-REVIEW-TEMPLATE.md)
