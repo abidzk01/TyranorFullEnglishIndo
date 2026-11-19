@@ -38,6 +38,8 @@ internal object GameOverridePartitions {
     const val KEY_ART_KERNEL = "artemis_kernel"
     const val KEY_ART_ROTATE = "art_rotate_screen"
     const val KEY_ART_PATCH = "art_auto_patch"
+    const val KEY_ART_ANIME4K_ENABLED = "art_anime4k_enabled"
+    const val KEY_ART_ANIME4K_MODE = "art_anime4k_mode"
     const val KEY_RPG_MAKER_MOD_ENABLED = "rpg_maker_mod_enabled"
     const val KEY_RPG_LEGACY_RENDERER = "rpg_legacy_renderer"
     const val KEY_RPG_SAVE_INTEROP = "rpg_save_interop"
@@ -69,6 +71,18 @@ internal object GameOverridePartitions {
     const val KEY_RPG_SPEED_UP = "rpg_speed_up"
     const val KEY_RPG_FONT_SCALE = "rpg_font_scale"
     const val KEY_TY_SCOPED = "ty_scoped"
+    // Winlator 无独立分区：单游戏运行模式与覆盖参数随 tyrano 分区持久化，
+    // 全部显式建模，避免未来收紧分区时靠「未识别键兜底」静默丢键。
+    const val KEY_WINLATOR_MODE = "winlator_mode"
+    const val KEY_WINLATOR_CONTAINER_ID = "winlator_container_id"
+    const val KEY_WINLATOR_CONTAINER_NAME = "winlator_container_name"
+    const val KEY_WINLATOR_GRAPHICS_DRIVER = "winlator_graphics_driver"
+    const val KEY_WINLATOR_DXWRAPPER = "winlator_dxwrapper"
+    const val KEY_WINLATOR_SCREEN_SIZE = "winlator_screen_size"
+    const val KEY_WINLATOR_LC_ALL = "winlator_lc_all"
+    const val KEY_WINLATOR_TZ = "winlator_tz"
+    const val KEY_WINLATOR_BOX64_PRESET = "winlator_box64_preset"
+    const val KEY_WINLATOR_SAVE = "winlator_save"
     const val KEY_RENPY_VERSION = "renpy_engine_version"
     // Siglus 无独立分区：语言覆盖随 tyrano 分区持久化（与 RPG Maker 会话键同策略）
     const val KEY_SIGLUS_LANGUAGE = "siglus_language"
@@ -76,6 +90,9 @@ internal object GameOverridePartitions {
     const val KEY_FB_NLS = "fb_nls"
     // FVP 无独立分区：编码/字体开关覆盖同样随 tyrano 分区持久化
     const val KEY_FVP_NLS = "fvp_nls"
+    const val KEY_ETHORNELL_NLS = "ethornell_nls"
+    const val KEY_ETHORNELL_FONT = "ethornell_font"
+    const val KEY_CMVS_FONT = "cmvs_font"
     const val KEY_FVP_SYSTEM_FONT = "fvp_system_font"
     const val KEY_FVP_TEXT_HIDPI = "fvp_text_hidpi"
     const val KEY_FVP_FONT = "fvp_font"
@@ -84,6 +101,13 @@ internal object GameOverridePartitions {
     const val KEY_XSYS35_RENDERER = "xsys35_renderer"
     const val KEY_XSYS35_INTEGER_SCALE = "xsys35_integer_scale"
     const val KEY_XSYS35_MUTE_UNFOCUS = "xsys35_mute_unfocus"
+    // System4 无独立分区：六项覆盖随 tyrano 分区持久化（与 PerGameSettingsStore.F_XSYS4_* 字面量锚定）
+    const val KEY_XSYS4_SCOPED_SAVE_DIR = "xsys4_scoped_save_dir"
+    const val KEY_XSYS4_ENCODING = "xsys4_encoding"
+    const val KEY_XSYS4_FONT_GOTHIC_PATH = "xsys4_font_gothic_path"
+    const val KEY_XSYS4_FONT_MINCHO_PATH = "xsys4_font_mincho_path"
+    const val KEY_XSYS4_JOYPAD = "xsys4_joypad"
+    const val KEY_XSYS4_MSGSKIP_DELAY = "xsys4_msgskip_delay"
     // Ren'Py 外置模块配置覆盖键（与 PerGameSettingsStore.F_RENPY_* 字面量锚定）
     const val KEY_RENPY_CHEATS = "renpy_cheats"
     const val KEY_RENPY_HW_VIDEO = "renpy_hw_video"
@@ -94,21 +118,54 @@ internal object GameOverridePartitions {
     const val KEY_RENPY_LESS_UPDATES = "renpy_less_updates"
     const val KEY_RENPY_DONT_USE_GL2 = "renpy_dont_use_gl2"
     const val KEY_RENPY_RECOMPILE = "renpy_recompile"
+    // Ruffle 外置模块配置覆盖键（与 PerGameSettingsStore.F_RUFFLE_*、EngineSettingsStore.KEY_RUFFLE_* 字面量锚定）
+    const val KEY_RUFFLE_SCREEN_TIMEOUT = "ruffle_screen_timeout"
+    const val KEY_RUFFLE_BACKEND = "ruffle_backend"
+    const val KEY_RUFFLE_QUALITY = "ruffle_quality"
+    const val KEY_RUFFLE_SCALE_MODE = "ruffle_scale_mode"
+    const val KEY_RUFFLE_LETTERBOX = "ruffle_letterbox"
+    const val KEY_RUFFLE_LOAD_BEHAVIOR = "ruffle_load_behavior"
+    // MAGES.（impacto）宿主配置覆盖键（与 PerGameSettingsStore.F_IMPACTO_*、EngineSettingsStore.KEY_IMPACTO_* 字面量锚定）
+    const val KEY_IMPACTO_SWAP_CONFIRM_CANCEL = "impacto_swap_confirm_cancel"
+    const val KEY_IMPACTO_VSYNC = "impacto_vsync"
+    const val KEY_IMPACTO_VIDEO_PLAYBACK = "impacto_video_playback"
+    const val KEY_IMPACTO_SUBTITLES = "impacto_subtitles"
+    const val KEY_IMPACTO_CLOSE_BACKLOG_AT_END = "impacto_close_backlog_at_end"
+    const val KEY_IMPACTO_DELUSION_MOUSE = "impacto_delusion_mouse"
+    const val KEY_IMPACTO_LOG_LEVEL = "impacto_log_level"
     const val ONS_OBJECT_KEY = "ons"
+    const val KEY_RUNTIME_MODULE_SETTINGS = "runtime_module_settings"
+
+    /** Read-only legacy migration key; keep old KR values in their own partition until frozen. */
+    const val KEY_KR_LEGACY_ANIME4K_MODE = "anime4k_mode"
+
+    const val KEY_KR_GRAPHICS = "kr_graphics_v1"
+    const val KEY_ART_GRAPHICS = "artemis_graphics_v1"
+    const val KEY_SIGLUS_GRAPHICS = "siglus_graphics_v1"
 
     val KR_KEYS: Set<String> = setOf(
+        KEY_KR_GRAPHICS, KEY_KR_LEGACY_ANIME4K_MODE,
         KEY_ENGINE_VERSION, KEY_ENGINE_KERNEL, KEY_SCOPED_SAVE_DIR, KEY_DEFAULT_FONT,
         KEY_FORCE_DEFAULT_FONT, KEY_PATCH_OVERLAY_MODE, KEY_RENDERER, KEY_SOFTWARE_DRAW_THREAD,
         KEY_SOFTWARE_COMPRESS_TEX, KEY_OGL_COMPRESS_TEX, KEY_MEM_USAGE, KEY_OGL_MAX_TEXSIZE,
         KEY_OGL_ACCURATE_RENDER, KEY_FPS_LIMIT, KEY_VCURSOR_SCALE, KEY_MENU_HANDLER_OPA,
         KEY_SKIP_STARTUP_DIALOGS,
     )
-    val ARTEMIS_KEYS: Set<String> = setOf(KEY_ART_VERSION, KEY_ART_KERNEL, KEY_ART_ROTATE, KEY_ART_PATCH)
+    val ARTEMIS_KEYS: Set<String> = setOf(
+        KEY_ART_GRAPHICS,
+        KEY_ART_VERSION, KEY_ART_KERNEL, KEY_ART_ROTATE, KEY_ART_PATCH,
+        KEY_ART_ANIME4K_ENABLED, KEY_ART_ANIME4K_MODE,
+    )
     // RPG Maker 会话键（legacy 渲染、MV/MZ 运行时版本、RGSS 外置模块配置）与 tyrano 共用分区：
     // v0 宿主与 v1/v2 宿主的逐游戏覆盖都在这一条 blob 里，显式建模，
     // 不依赖“未识别键兜底归入 tyrano”的 else 路径，防止未来收紧分区时丢键
     val TYRANO_KEYS: Set<String> = setOf(
-        KEY_TY_SCOPED, KEY_RPG_MAKER_MOD_ENABLED, KEY_RPG_SAVE_INTEROP,
+        KEY_TY_SCOPED, KEY_WINLATOR_MODE,
+        KEY_RUNTIME_MODULE_SETTINGS,
+        KEY_WINLATOR_CONTAINER_ID, KEY_WINLATOR_CONTAINER_NAME,
+        KEY_WINLATOR_GRAPHICS_DRIVER, KEY_WINLATOR_DXWRAPPER, KEY_WINLATOR_SCREEN_SIZE,
+        KEY_WINLATOR_LC_ALL, KEY_WINLATOR_TZ, KEY_WINLATOR_BOX64_PRESET, KEY_WINLATOR_SAVE,
+        KEY_RPG_MAKER_MOD_ENABLED, KEY_RPG_SAVE_INTEROP,
         KEY_RPG_LEGACY_RENDERER, KEY_RPG_MV_VERSION, KEY_RPG_MZ_VERSION,
         KEY_INPUT_PAD_ENABLED, KEY_INPUT_GAMEPAD_ENABLED, KEY_INPUT_PROFILE_ID,
         KEY_INPUT_LEGACY_MIGRATED,
@@ -118,11 +175,20 @@ internal object GameOverridePartitions {
         KEY_RPG_CHEATS, KEY_RPG_USE_CJK_FONT, KEY_RPG_ENABLE_POSTLOAD_SCRIPTS,
         KEY_RPG_CUSTOM_FONT, KEY_RPG_VERTICAL_SCREEN_ALIGN, KEY_RPG_WINDOW_SIZE,
         KEY_RPG_SPEED_UP, KEY_RPG_FONT_SCALE,
-        KEY_SIGLUS_LANGUAGE,
+        KEY_SIGLUS_LANGUAGE, KEY_SIGLUS_GRAPHICS,
         KEY_FB_NLS,
+        KEY_ETHORNELL_NLS, KEY_ETHORNELL_FONT, KEY_CMVS_FONT,
         KEY_FVP_NLS, KEY_FVP_SYSTEM_FONT, KEY_FVP_TEXT_HIDPI, KEY_FVP_FONT,
         KEY_XSYS35_SCOPED_SAVE_DIR, KEY_XSYS35_RENDERER,
         KEY_XSYS35_INTEGER_SCALE, KEY_XSYS35_MUTE_UNFOCUS,
+        KEY_XSYS4_SCOPED_SAVE_DIR, KEY_XSYS4_ENCODING,
+        KEY_XSYS4_FONT_GOTHIC_PATH, KEY_XSYS4_FONT_MINCHO_PATH,
+        KEY_XSYS4_JOYPAD, KEY_XSYS4_MSGSKIP_DELAY,
+        KEY_RUFFLE_SCREEN_TIMEOUT, KEY_RUFFLE_BACKEND, KEY_RUFFLE_QUALITY,
+        KEY_RUFFLE_SCALE_MODE, KEY_RUFFLE_LETTERBOX, KEY_RUFFLE_LOAD_BEHAVIOR,
+        KEY_IMPACTO_SWAP_CONFIRM_CANCEL, KEY_IMPACTO_VSYNC, KEY_IMPACTO_VIDEO_PLAYBACK,
+        KEY_IMPACTO_SUBTITLES,
+        KEY_IMPACTO_CLOSE_BACKLOG_AT_END, KEY_IMPACTO_DELUSION_MOUSE, KEY_IMPACTO_LOG_LEVEL,
     )
     // Ren'Py 分区：版本选择 + 外置模块配置，显式建模防止未来收紧分区时丢键
     val RENPY_KEYS: Set<String> = setOf(

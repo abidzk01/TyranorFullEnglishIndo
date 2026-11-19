@@ -1,5 +1,6 @@
 package com.tyranor.next.ui.home
 
+import androidx.compose.foundation.layout.BoxScope
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -44,6 +45,11 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tyranor.next.R
 import com.tyranor.next.ui.common.NoRippleButton
+import com.tyranor.next.ui.common.motion.BlurVisibility
+import com.tyranor.next.ui.common.motion.ProvideEntrance
+import com.tyranor.next.ui.common.motion.rememberEntranceState
+import com.tyranor.next.ui.common.motion.staggeredEntrance
+import com.tyranor.next.ui.common.notice.AppNotice
 
 /**
  * Web 首页：内置 WebView 展示用户所选网址（应用设置「首页样式切换」为网页时挂载）。
@@ -54,7 +60,7 @@ import com.tyranor.next.ui.common.NoRippleButton
  *   下载仅 http(s) 交系统浏览器处理（blob/data 无法外发，提示用户）；
  * - 不注入任何 `addJavascriptInterface`，禁用文件/content 访问（任意网址内容的安全底线）；
  *   混合内容用兼容模式（用户可自定义 http 站点，属有意取舍）；
- * - 四页常驻组合下首页切走后不会销毁：不在前台（[isActive] 为 false）或应用退后台时
+ * - 主界面常驻组合下首页切走后不会销毁：不在前台（[isActive] 为 false）或应用退后台时
  *   `onPause + pauseTimers + 暂停媒体 + 收键盘`，避免后台继续跑 JS/音视频；引擎 WebView 在独立进程，
  *   主进程已用 `WebView.setDataDirectorySuffix` 隔离数据目录（见 TyranorNextApplication）；
  * - `canGoBack()` 且首页在前台时，返回键先回退页面而不是退出应用；
@@ -185,7 +191,7 @@ internal fun HomeWebView(
                                 if (scheme == "http" || scheme == "https") {
                                     if (!openExternally(context, uri)) toastOpenFailed(context)
                                 } else {
-                                    Toast.makeText(context, R.string.home_web_download_unsupported, Toast.LENGTH_SHORT).show()
+                                    AppNotice.makeText(context, R.string.home_web_download_unsupported, Toast.LENGTH_SHORT).show()
                                 }
                             }
                             webView = this
@@ -233,15 +239,43 @@ internal fun HomeWebView(
             }
         }
 
-        if (loading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
-            )
+        HomeWebStatus(loading, loadFailed) {
+            loadFailed = false
+            loading = true
+            if (crashed) {
+                // 崩溃路径：置回后由加载 effect 重建后的 WebView 重新加载
+                crashed = false
+            } else {
+                webView?.reload()
+            }
         }
+    }
+}
 
-        if (loadFailed) {
+@Composable
+private fun BoxScope.HomeWebStatus(loading: Boolean, loadFailed: Boolean, onRetry: () -> Unit) {
+    // 加载进度条：开始 / 结束加载时原地淡入淡出（不缩放，细条保持满宽），不再瞬间出现消失
+    BlurVisibility(
+        visible = loading,
+        modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+        blur = 4.dp,
+        initialScale = 1f,
+        label = "homeWebProgress",
+    ) {
+        LinearProgressIndicator(
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+
+    // 加载失败：提示块从模糊里弹出（重试时原路缩回），块内文字与按钮依次弹入
+    BlurVisibility(
+        visible = loadFailed,
+        modifier = Modifier.align(Alignment.Center),
+        label = "homeWebError",
+    ) {
+        ProvideEntrance(rememberEntranceState()) {
             Column(
-                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -249,20 +283,14 @@ internal fun HomeWebView(
                     stringResource(R.string.home_web_error),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.staggeredEntrance(0, distance = 12.dp),
                 )
                 NoRippleButton(
                     text = stringResource(R.string.common_retry),
                     tonal = true,
-                ) {
-                    loadFailed = false
-                    loading = true
-                    if (crashed) {
-                        // 崩溃路径：置回后由加载 effect 重建后的 WebView 重新加载
-                        crashed = false
-                    } else {
-                        webView?.reload()
-                    }
-                }
+                    modifier = Modifier.staggeredEntrance(1, distance = 16.dp),
+                    onClick = onRetry,
+                )
             }
         }
     }
@@ -283,5 +311,5 @@ private fun openExternally(context: Context, uri: Uri): Boolean = runCatching {
 }.isSuccess
 
 private fun toastOpenFailed(context: Context) {
-    Toast.makeText(context, R.string.home_web_open_browser_failed, Toast.LENGTH_SHORT).show()
+    AppNotice.makeText(context, R.string.home_web_open_browser_failed, Toast.LENGTH_SHORT).show()
 }

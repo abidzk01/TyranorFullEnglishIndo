@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.ViewGroup;
 import android.widget.Toast;
 
 import org.libsdl.app32.SDLActivity;
@@ -13,6 +14,7 @@ import org.tvp.kirikiri2.KrDialogStyle;
 
 import com.core.engine.DoubleBackExit;
 import com.core.engine.EnginePrefs;
+import com.core.engine.EngineSurfaceStartupController;
 import com.core.engine.EngineUiText;
 import com.core.engine.LaunchContract;
 import com.core.engine.R;
@@ -53,6 +55,8 @@ public final class Xs35Activity extends SDLActivity {
     /** 标题回写只做一次（SDL 每次 setWindowTitle 都会回调 setTitle）。 */
     private volatile boolean titleWrittenBack = false;
 
+    private EngineSurfaceStartupController startupController;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // 先解析 Intent：缺失游戏目录或缺少场景档时必须尽早失败并结束，不进入 SDL 主循环。
@@ -85,8 +89,27 @@ public final class Xs35Activity extends SDLActivity {
             return;
         }
 
+        // 运行库由启动编排解压；缺失（或 stamp 与当前 APK 不一致）时不能在此 finish：
+        // 本类是 SDL 宿主，super.onCreate 才加载运行库，未调用 super 就结束会抛
+        // SuperNotCalledException。保持 null 交给 loadLibraries 抛 UnsatisfiedLinkError，
+        // 由 SDL 的 mBrokenLibraries 错误路径收场。
+        String sdl = com.core.nativeplugin.NativeRuntimePack.libraryPath(
+                this, com.core.nativeplugin.NativeRuntimePack.PACK_XSYSTEM, "libSDL2x.so");
+        String engine = com.core.nativeplugin.NativeRuntimePack.libraryPath(
+                this, com.core.nativeplugin.NativeRuntimePack.PACK_XSYSTEM, "libxsystem35.so");
+        if (sdl == null || engine == null) {
+            Toast.makeText(this, uiString(R.string.engine_xsys35_runtime_pack_missing), Toast.LENGTH_LONG).show();
+            Log.w(TAG, "xsystem runtime pack not ready: sdl=" + sdl + " engine=" + engine);
+        }
+        // 无条件赋值（含 null）：静态字段跨 Activity 实例保留，必须清掉上一次的旧路径。
+        sSdlLibraryPath = sdl;
+        sEngineLibraryPath = engine;
         super.onCreate(savedInstanceState);
-        sdlReady = true;
+        sdlReady = !SDLActivity.mBrokenLibraries;
+        if (SDLActivity.mBrokenLibraries) {
+            // SDL 已展示运行库加载错误框，不再初始化依赖 native 的 MIDI / 窗口样式。
+            return;
+        }
 
         midi = new Xs35MidiPlayer();
 
@@ -100,10 +123,20 @@ public final class Xs35Activity extends SDLActivity {
         Log.i(TAG, "xsys35 launch gamedir=" + gameRoot
                 + " scoped=" + getIntent().getBooleanExtra(LaunchContract.XS35_SCOPED_SAVE_DIR, false)
                 + " savedir=" + scopedSaveDir);
+        attachStartupOverlay();
+    }
+
+    private void attachStartupOverlay() {
+        if (SDLActivity.mBrokenLibraries || SDLActivity.mSurface == null || SDLActivity.mLayout == null) return;
+        ViewGroup content = findViewById(android.R.id.content);
+        startupController = new EngineSurfaceStartupController(this);
+        startupController.attachTo(content != null ? content : SDLActivity.mLayout,
+                SDLActivity.mSurface.getHolder());
     }
 
     @Override
     protected void onStop() {
+        if (startupController != null) startupController.onPause();
         super.onStop();
         if (midi != null) {
             midi.onActivityStop();
@@ -113,6 +146,7 @@ public final class Xs35Activity extends SDLActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (startupController != null) startupController.onResume();
         if (midi != null) {
             midi.onActivityResume();
         }
@@ -123,6 +157,10 @@ public final class Xs35Activity extends SDLActivity {
         // 上游顺序：先让 SDLActivity.onDestroy 收尾（停 SDL 线程 / nativeQuit），再释放 MIDI，
         // 最后无条件自杀进程（引擎原生库不可重入，与 Artemis/KRKR 宿主同策略）。
         try {
+            if (startupController != null) {
+                startupController.dispose();
+                startupController = null;
+            }
             super.onDestroy();
         } finally {
             try {
@@ -134,6 +172,18 @@ public final class Xs35Activity extends SDLActivity {
                 android.os.Process.killProcess(android.os.Process.myPid());
             }
         }
+    }
+
+    @Override
+    protected void onPause() {
+        if (startupController != null) startupController.onPause();
+        super.onPause();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (startupController != null) startupController.onWindowFocusChanged(hasFocus);
     }
 
     @Override
@@ -169,21 +219,46 @@ public final class Xs35Activity extends SDLActivity {
      * xsystem35 以可缩放窗口创建 SDL 窗口且未设置 SDL_HINT_ORIENTATIONS，上游 SDL 在
      * 「无 hint + resizable」时会请求 SCREEN_ORIENTATION_FULL_USER（尊重系统旋转锁），
      * 设备锁定竖屏时活动会以竖屏渲染、游戏被信箱化。System3.x 游戏必须横屏，故覆盖
-     * 该扩展点始终请求 sensorLandscape（与 manifest 声明一致，不受旋转锁影响）。
+     * 该扩展点始终请求标准横屏。
      */
     @Override
     public void setOrientationBis(int w, int h, boolean resizable, String hint) {
-        Log.v(TAG, "force sensorLandscape (w=" + w + ", h=" + h + ", resizable=" + resizable + ", hint=" + hint + ")");
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        Log.v(TAG, "force landscape (w=" + w + ", h=" + h + ", resizable=" + resizable + ", hint=" + hint + ")");
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+    }
+
+    @Override
+    public void setRequestedOrientation(int requestedOrientation) {
+        super.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
     }
 
     // ---------- SDL 主循环参数 ----------
 
+    // 引擎库从运行库包按绝对路径加载；libSDL2x.so 同包，先加载依赖。
+    private static volatile String sSdlLibraryPath;
+    private static volatile String sEngineLibraryPath;
+
+    @Override
+    public void loadLibraries() {
+        String sdl = sSdlLibraryPath;
+        String engine = sEngineLibraryPath;
+        if (sdl == null || engine == null) throw new UnsatisfiedLinkError("xsystem runtime pack missing");
+        System.load(sdl);
+        System.load(engine);
+    }
+
+    @Override
+    protected String getMainSharedObject() {
+        String path = sEngineLibraryPath;
+        // SDL 默认返回 nativeLibraryDir + 库名，这里换成运行库包解压后的绝对路径。
+        return path != null ? path : super.getMainSharedObject();
+    }
+
     @Override
     protected String[] getLibraries() {
-        // 顺序即加载顺序，末项为主库（getMainSharedObject / getMainFunction 由 SDLActivity 默认值给出）。
-        // SDL2_mixer / freetype / libwebp 经 DT_NEEDED 自动解析，无需显式加载。
-        return new String[] { "SDL2x", "xsystem35" };
+        // 实际加载顺序由覆写的 loadLibraries() 决定（SDL2x → xsystem35），主库路径由
+        // getMainSharedObject() 返回解压后的绝对路径；SDL2_mixer / freetype / libwebp 经 DT_NEEDED 自动解析。
+        return new String[] { "SDL2x" };
     }
 
     @Override

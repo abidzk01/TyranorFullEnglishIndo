@@ -4,6 +4,7 @@ import tv.danmaku.ijk.media.player.IMediaPlayer
 import tv.danmaku.ijk.media.player.widget.IjkVideoView
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.res.AssetFileDescriptor
 import android.graphics.Color
 import android.media.AudioManager
@@ -23,6 +24,10 @@ class VideoViewActivity : Activity(), IMediaPlayer.OnCompletionListener, IMediaP
     private var pausedBySystem = false
     private var skip = 0
     private var videoView: IjkVideoView? = null
+
+    override fun setRequestedOrientation(requestedOrientation: Int) {
+        super.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+    }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event != null && isSystemVolumeKey(event.keyCode)) return super.dispatchKeyEvent(event)
@@ -52,6 +57,11 @@ class VideoViewActivity : Activity(), IMediaPlayer.OnCompletionListener, IMediaP
 
     override fun onCreate(bundle: Bundle?) {
         super.onCreate(bundle)
+        // IJK 三件套来自运行库包；缺失时直接结束，避免在播放器构造期抛 UnsatisfiedLinkError。
+        if (!com.core.nativeplugin.IjkRuntime.load(this)) {
+            finish()
+            return
+        }
         setVolumeControlStream(AudioManager.STREAM_MUSIC)
         enterFullscreen()
         pausedBySystem = false

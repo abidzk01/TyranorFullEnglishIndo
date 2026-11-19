@@ -1,0 +1,139 @@
+package com.tyranor.runtime.systemnnn;
+
+import android.graphics.Bitmap;
+import android.util.Log;
+import com.core.engine.R;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/** Title assets are decoded from the selected game. Button source rectangles use the untrimmed canvas. */
+final class TitleMenu {
+    enum Action {
+        START(R.string.engine_systemnnn_ctl_title_new), LOAD(R.string.engine_systemnnn_host_load_save),
+        SETTINGS(R.string.engine_systemnnn_host_settings), EXTRAS(R.string.engine_systemnnn_ctl_title_gallery),
+        EXIT(R.string.engine_systemnnn_host_exit_game), CONTINUE(R.string.engine_systemnnn_host_continue_game),
+        LAST_LOAD(R.string.engine_systemnnn_ctl_title_last_load), WEBSITE(R.string.engine_systemnnn_ctl_title_website), MODE(R.string.engine_systemnnn_ctl_title_extension),
+        SCENARIO(R.string.engine_systemnnn_ctl_title_scenario), MINIGAME(R.string.engine_systemnnn_ctl_title_minigame);
+        final int labelRes;
+        Action(int labelRes) { this.labelRes=labelRes; }
+    }
+    static final class Item {
+        final Action action;
+        final int x,y,width,height,mode,scenario;
+        final boolean enabled;
+        final String label;
+        Bitmap image;
+        GameButton.Spec spec;
+        Item(Action action,int x,int y,int width,int height,boolean enabled) {
+            this(action,x,y,width,height,enabled,0,0,null);
+        }
+        Item(Action action,int x,int y,int width,int height,boolean enabled,int mode,int scenario,String label){
+            this.action=action;this.x=x;this.y=y;this.width=width;this.height=height;this.enabled=enabled;
+            this.mode=mode;this.scenario=scenario;this.label=label;
+        }
+    }
+    final ArrayList<Item> items=new ArrayList<>();
+    final boolean skinned;
+    final String website;
+    // Raw game bytes. Empty when the title has no extension modes, as on PC.
+    final String scenarioVariable;
+    final GameUiAssets.Config config;
+    final int frameMs,autoRestartTime;
+    private final int bgmNumber;
+    final boolean restartOnBackgroundEnd;
+    TitleMenu(File root,long handle,boolean anyLoadData,boolean lastLoad) throws IOException {
+        config=GameUiAssets.readConfig(root,"title");
+        GameUiAssets.SharedConfig shared=handle!=0?GameUiAssets.SharedConfig.from(NativeGame.sharedConfigSnapshot(handle),root,null,null):null;
+        boolean fromNative=shared!=null&&shared.fromNative;
+        frameMs=Math.max(1,fromNative?shared.defaultFrameMs:GameUiAssets.readConfig(root,"game").number("frameTime",20));
+        bgmNumber=fromNative?shared.titleBgmNumber:number("bgmNumber",1);
+        boolean scripted=number("backScriptFlag",0)!=0;
+        autoRestartTime=number("autoRestartTime",0);
+        restartOnBackgroundEnd=scripted&&number("scriptEndIsModeEnd",0)!=0;
+        String script=scripted ? value("backScriptName","") : "";
+        String background=scripted ? "" : GameUiAssets.systemImageKey(value("filenameBG","title_bg"));
+        NativeGame.configureMenuBackground(handle,4,raw(script),raw(background),number("backScriptLoopFlag",0)!=0);
+        try{restoreMusic(handle);}
+        catch(RuntimeException e){Log.w("SystemNNN","Title music unavailable",e);}
+        website=value("HTMLaddr","");
+        scenarioVariable=number("extModeNumber",0)>0?value("extModeReturnVarName",""):"";
+        boolean extras=GameResourcePaths.file(root,"init","omake.xtx")!=null||GameResourcePaths.file(root,"init2","omake.fxf")!=null;
+        Action[] basic={Action.START,Action.LOAD,Action.SETTINGS,Action.EXTRAS,Action.EXIT};
+        int count=DialogueLayout.clamp(number("basicButtonNumber",basic.length),0,64);
+        List<MenuModeButton> buttons=MenuModeButton.readTitle(config,handle,count,basic.length);
+        skinned=config.has("menu1Button1FileName")||config.has("menu1Button1PrintX")||
+            config.has("menu1Button1PrintY")||buttons.stream().anyMatch(button->!button.setup.art.image.isEmpty());
+        Map<String,Bitmap> artwork=new HashMap<>();
+        for(MenuModeButton button:buttons){
+            Action action=button.index<basic.length?basic[button.index]:button.scenario!=0?Action.SCENARIO:Action.MODE;
+            if(!skinned&&(action==Action.MODE||action==Action.EXTRAS&&!extras))continue;
+            ButtonArt.Setup setup=button.setup;
+            boolean enabled=button.enabled&&(action!=Action.EXTRAS||extras)&&
+                saveActionEnabled(config,action,anyLoadData,lastLoad);
+            Item item=new Item(action,button.x,button.y,setup.width,setup.height,enabled,
+                button.mode,button.scenario,button.label);
+            if(skinned){
+                item.spec=new GameButton.Spec(setup);
+                loadArtwork(handle,item,artwork);
+            }
+            items.add(item);
+        }
+        if(skinned){
+            if (number("EnableLastLoadButton",0)>0) add(handle,"LastLoad",Action.LAST_LOAD,
+                saveActionEnabled(config,Action.LAST_LOAD,anyLoadData,lastLoad),artwork);
+            if (number("EnableHTMLButton",0)!=0) add(handle,"HTML",Action.WEBSITE,
+                website.startsWith("https://")||website.startsWith("http://"),artwork);
+        }else{
+            int continueIndex=!items.isEmpty()&&items.get(0).action==Action.START?1:0;
+            items.add(continueIndex,new Item(Action.CONTINUE,0,0,0,0,
+                saveActionEnabled(config,Action.CONTINUE,anyLoadData,lastLoad)));
+        }
+        for(GameMiniGames.Entry entry:GameMiniGames.entries(root,config,handle,"title")){
+            Item item=new Item(Action.MINIGAME,entry.x,entry.y,entry.w,entry.h,true,entry.index,0,null);
+            item.spec=entry.spec;item.image=entry.image;items.add(item);
+        }
+    }
+    static boolean saveActionEnabled(GameUiAssets.Config config,Action action,boolean anyLoadData,boolean lastLoad){
+        if(action==Action.LOAD)return config.number("noSaveDataToMaskMenu",0)==0||anyLoadData;
+        if(action==Action.CONTINUE||action==Action.LAST_LOAD)return lastLoad;
+        return true;
+    }
+    int musicNumber() { return bgmNumber; }
+    boolean musicRestarts() { return number("bgmRestartFlag",1)!=0; }
+    void restoreMusic(long handle) {
+        NativeGame.menuMusic(handle,musicNumber(),number("bgmLoop",0),number("bgmVolume",0),
+            number("bgmFadeInTime",-1),musicRestarts());
+    }
+    private String value(String k,String fallback) { return config.value(k,fallback); }
+    private int number(String k,int fallback) { return config.number(k,fallback); }
+    private static byte[] raw(String s) { return s.getBytes(StandardCharsets.ISO_8859_1); }
+    private int option(String tag,String name,int fallback) {
+        return number(tag+name,number("menu1Button1"+name,fallback));
+    }
+    private void add(long handle,String tag,Action action,boolean enabled,Map<String,Bitmap> artwork) {
+        int x=number(tag+"PrintX",-1),y=number(tag+"PrintY",-1);
+        int w=option(tag,"SizeX",216),h=option(tag,"SizeY",52);
+        if (x<0 || y<0 || w<=0 || h<=0 || w>2048 || h>2048) return;
+        Item item=new Item(action,x,y,w,h,enabled);
+        item.spec=new GameButton.Spec(config,tag,null,w,h);
+        loadArtwork(handle,item,artwork);
+        if (item.image==null) Log.w("SystemNNN","Title button uses text: "+tag);
+        items.add(item);
+    }
+    private static void loadArtwork(long handle,Item item,Map<String,Bitmap> artwork){
+        String name=GameUiAssets.systemImageKey(item.spec.image);
+        if(name.isEmpty())return;
+        if(!artwork.containsKey(name)){
+            Bitmap image=null;
+            int[] pixels=NativeGame.titleSprite(handle,raw(name));
+            if (pixels!=null && pixels.length>=2 && (long)pixels[0]*pixels[1]==pixels.length-2L)
+                image=Bitmap.createBitmap(pixels,2,pixels[0],pixels[0],pixels[1],Bitmap.Config.ARGB_8888);
+            artwork.put(name,image);
+        }
+        item.image=artwork.get(name);
+    }
+}

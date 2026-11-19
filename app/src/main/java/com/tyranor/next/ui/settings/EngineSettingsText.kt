@@ -1,9 +1,13 @@
 package com.tyranor.next.ui.settings
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import com.tyranor.next.R
+import com.tyranor.next.core.engine.external.WinlatorContract
 import com.tyranor.next.core.settings.EngineSettingsStore
+import com.tyranor.next.core.settings.GraphicsFilterCatalog
+import com.tyranor.next.core.settings.GraphicsFilterCategory
 
 @Composable
 internal fun engineSettingsKindTitle(kind: EngineSettingsKind): String = stringResource(kind.titleRes)
@@ -13,7 +17,6 @@ internal fun krSelectOptions(): List<Pair<String, String>> = listOf(
     EngineSettingsStore.KR_AUTO to stringResource(R.string.common_auto),
     EngineSettingsStore.KR_139 to "1.3.9",
     EngineSettingsStore.KR_134 to "1.3.4",
-    EngineSettingsStore.KR_126 to "1.2.6",
 )
 
 @Composable
@@ -28,18 +31,6 @@ internal fun krPatchOverlayOptions(): List<Pair<String, String>> = listOf(
     EngineSettingsStore.KR_PATCH_OVERLAY_AUTO to stringResource(R.string.common_auto),
     EngineSettingsStore.KR_PATCH_OVERLAY_FORCE to stringResource(R.string.engine_option_force_enable),
     EngineSettingsStore.KR_PATCH_OVERLAY_OFF to stringResource(R.string.engine_option_off),
-)
-
-@Composable
-internal fun krAnime4kOptions(): List<Pair<String, String>> = listOf(
-    EngineSettingsStore.ANIME4K_OFF to stringResource(R.string.engine_option_off),
-    EngineSettingsStore.ANIME4K_S to stringResource(R.string.engine_option_anime4k_fast),
-    EngineSettingsStore.ANIME4K_M to stringResource(R.string.engine_option_anime4k_balanced),
-    EngineSettingsStore.ANIME4K_L to stringResource(R.string.engine_option_anime4k_high),
-    EngineSettingsStore.ANIME4K_SOFT_S to stringResource(R.string.engine_option_anime4k_soft_fast),
-    EngineSettingsStore.ANIME4K_SOFT_M to stringResource(R.string.engine_option_anime4k_soft_balanced),
-    EngineSettingsStore.ANIME4K_SOFT_L to stringResource(R.string.engine_option_anime4k_soft_high),
-    EngineSettingsStore.ANIME4K_DEBLUR to stringResource(R.string.engine_option_anime4k_deblur),
 )
 
 @Composable
@@ -108,9 +99,6 @@ internal fun artVersionOptions(): List<Pair<String, String>> = listOf(
     EngineSettingsStore.ART_ENGINE_AUTO to stringResource(R.string.common_auto),
     EngineSettingsStore.ART_ENGINE_V2 to "v1（Tyranor/Rev.2762）",
     EngineSettingsStore.ART_ENGINE_V1 to "v2（Tyranor/Rev.3049/emote）",
-    EngineSettingsStore.ART_ENGINE_V3 to "v3（Tyranor/Rev.3201/emote）",
-    EngineSettingsStore.ART_ENGINE_V4 to "V1（TyranorNext/Rev.2958）",
-    EngineSettingsStore.ART_ENGINE_V5 to "V3（TyranorNext/Rev.3288）",
     EngineSettingsStore.ART_ENGINE_V6 to "V4（TyranorNext/Rev.3294/emote）",
 )
 
@@ -124,7 +112,8 @@ internal fun artKernelOptions(): List<Pair<String, String>> = listOf(
 @Composable
 internal fun renpyVersionOptions(): List<Pair<String, String>> = listOf(
     EngineSettingsStore.RENPY_AUTO to stringResource(R.string.common_auto),
-    EngineSettingsStore.RENPY_85 to "8.5",
+    EngineSettingsStore.RENPY_850 to "8.5.0",
+    EngineSettingsStore.RENPY_853 to "8.5.3",
     EngineSettingsStore.RENPY_77 to "7.7.1",
 )
 
@@ -166,6 +155,30 @@ internal fun xsys35RendererOptions(): List<Pair<String, String>> = listOf(
     EngineSettingsStore.XSYS35_RENDERER_AUTO to stringResource(R.string.engine_settings_xsys35_renderer_auto),
     EngineSettingsStore.XSYS35_RENDERER_OPENGL to stringResource(R.string.engine_settings_xsys35_renderer_opengl),
     EngineSettingsStore.XSYS35_RENDERER_SOFTWARE to stringResource(R.string.engine_settings_xsys35_renderer_software),
+)
+
+/** System4 文本编码（sjis 日文版 / gbk 中文版；须与游戏版本一致）。 */
+@Composable
+internal fun xsys4EncodingOptions(): List<Pair<String, String>> = listOf(
+    EngineSettingsStore.XSYS4_ENCODING_SJIS to stringResource(R.string.engine_settings_xsys4_encoding_sjis),
+    EngineSettingsStore.XSYS4_ENCODING_GBK to stringResource(R.string.engine_settings_xsys4_encoding_gbk),
+)
+
+/** System4 手柄：auto 不下发 `--joypad`，交由引擎默认。 */
+@Composable
+internal fun xsys4JoypadOptions(): List<Pair<String, String>> = listOf(
+    EngineSettingsStore.XSYS4_JOYPAD_AUTO to stringResource(R.string.engine_settings_xsys4_joypad_auto),
+    EngineSettingsStore.XSYS4_JOYPAD_ON to stringResource(R.string.engine_settings_xsys4_joypad_on),
+    EngineSettingsStore.XSYS4_JOYPAD_OFF to stringResource(R.string.engine_settings_xsys4_joypad_off),
+)
+
+/** System4 跳字延迟预设（0 = 引擎默认）。 */
+@Composable
+internal fun xsys4MsgskipOptions(): List<Pair<String, String>> = listOf(
+    "0" to stringResource(R.string.engine_settings_xsys4_msgskip_default),
+    "100" to stringResource(R.string.engine_settings_xsys4_msgskip_value, 100),
+    "200" to stringResource(R.string.engine_settings_xsys4_msgskip_value, 200),
+    "400" to stringResource(R.string.engine_settings_xsys4_msgskip_value, 400),
 )
 
 @Composable
@@ -217,9 +230,6 @@ internal fun krKernelOptionsMap(): Map<String, String> = krKernelOptions().toMap
 internal fun krPatchOverlayOptionsMap(): Map<String, String> = krPatchOverlayOptions().toMap()
 
 @Composable
-internal fun krAnime4kOptionsMap(): Map<String, String> = krAnime4kOptions().toMap()
-
-@Composable
 internal fun krRendererOptionsMap(): Map<String, String> =
     krRendererOptions().filterNot { it.first == "default" }.toMap()
 
@@ -265,6 +275,15 @@ internal fun fvpNlsOptionsMap(): Map<String, String> = fvpNlsOptions().toMap()
 @Composable
 internal fun xsys35RendererOptionsMap(): Map<String, String> = xsys35RendererOptions().toMap()
 
+@Composable
+internal fun xsys4EncodingOptionsMap(): Map<String, String> = xsys4EncodingOptions().toMap()
+
+@Composable
+internal fun xsys4JoypadOptionsMap(): Map<String, String> = xsys4JoypadOptions().toMap()
+
+@Composable
+internal fun xsys4MsgskipOptionsMap(): Map<String, String> = xsys4MsgskipOptions().toMap()
+
 /** RealLive / AVG32 / UK2 文本编码（创建引擎时固定）。 */
 @Composable
 internal fun fbNlsOptionsMap(): Map<String, String> = fbNlsOptions().toMap()
@@ -305,15 +324,23 @@ internal fun winlatorLcAllOptions(): List<Pair<String, String>> =
     listOf("" to stringResource(R.string.engine_settings_winlator_follow_container)) +
         EngineSettingsStore.WINLATOR_LOCALES.map { it to it }
 
+/** 提供固定时区选项，空串表示沿用容器时区。 */
 @Composable
 internal fun winlatorTimezoneOptions(): List<Pair<String, String>> =
     listOf("" to stringResource(R.string.engine_settings_winlator_follow_container)) +
         EngineSettingsStore.WINLATOR_TIMEZONES.map { it to it }
 
+/** 全局与单游戏共用的图形加速选项，区分容器渲染器与显式 OpenGL/GDI 预设。 */
 @Composable
 internal fun winlatorDxWrapperOptions(): List<Pair<String, String>> =
-    EngineSettingsStore.WINLATOR_DXWRAPPERS.map { v ->
-        v to v.ifBlank { stringResource(R.string.engine_settings_winlator_follow_container) }
+    EngineSettingsStore.WINLATOR_DXWRAPPERS.map { value ->
+        value to when (value) {
+            "" -> stringResource(R.string.engine_settings_winlator_follow_container)
+            "wined3d" -> stringResource(R.string.engine_settings_winlator_wined3d_container)
+            WinlatorContract.DXWRAPPER_WINED3D_GL -> stringResource(R.string.engine_settings_winlator_wined3d_gl)
+            WinlatorContract.DXWRAPPER_WINED3D_GDI -> stringResource(R.string.engine_settings_winlator_wined3d_gdi)
+            else -> value
+        }
     }
 
 @Composable
@@ -349,6 +376,7 @@ internal fun winlatorScreenSizeLabel(size: String): String = when (size) {
 internal fun winlatorGraphicsDriverOptionsMap(): Map<String, String> =
     winlatorGraphicsDriverOptions().toMap()
 
+/** 单游戏覆盖界面复用全局图形加速选项的存储值与本地化标签。 */
 @Composable
 internal fun winlatorDxWrapperOptionsMap(): Map<String, String> = winlatorDxWrapperOptions().toMap()
 
@@ -400,6 +428,94 @@ internal fun artSurfaceCacheOptionsMap(): Map<String, String> = artSurfaceCacheO
 @Composable
 internal fun artFontCacheOptionsMap(): Map<String, String> = artFontCacheOptions().toMap()
 
+// ───────────────────────── Ruffle 外置模块 ─────────────────────────
+
+/** 渲染后端：auto 交由插件探测，opengl 为兼容默认，vulkan 试验性。 */
+@Composable
+internal fun ruffleBackendOptions(): List<Pair<String, String>> = listOf(
+    "auto" to stringResource(R.string.engine_settings_ruffle_backend_auto),
+    EngineSettingsStore.RUFFLE_BACKEND_OPENGL to stringResource(R.string.engine_settings_ruffle_backend_opengl),
+    "vulkan" to stringResource(R.string.engine_settings_ruffle_backend_vulkan),
+)
+
+@Composable
+internal fun ruffleQualityOptions(): List<Pair<String, String>> = listOf(
+    "low" to stringResource(R.string.engine_settings_ruffle_quality_low),
+    "medium" to stringResource(R.string.engine_settings_ruffle_quality_medium),
+    EngineSettingsStore.RUFFLE_QUALITY_HIGH to stringResource(R.string.engine_settings_ruffle_quality_high),
+    "best" to stringResource(R.string.engine_settings_ruffle_quality_best),
+)
+
+/** SWF 画面缩放：showall 保持比例并显示全部内容（插件默认）。 */
+@Composable
+internal fun ruffleScaleModeOptions(): List<Pair<String, String>> = listOf(
+    "exactfit" to stringResource(R.string.engine_settings_ruffle_scale_exactfit),
+    "noborder" to stringResource(R.string.engine_settings_ruffle_scale_noborder),
+    "noscale" to stringResource(R.string.engine_settings_ruffle_scale_noscale),
+    EngineSettingsStore.RUFFLE_SCALE_MODE_SHOW_ALL to stringResource(R.string.engine_settings_ruffle_scale_showall),
+)
+
+@Composable
+internal fun ruffleLoadBehaviorOptions(): List<Pair<String, String>> = listOf(
+    EngineSettingsStore.RUFFLE_LOAD_BEHAVIOR_STREAMING to stringResource(R.string.engine_settings_ruffle_load_streaming),
+    "delayed" to stringResource(R.string.engine_settings_ruffle_load_delayed),
+    "blocking" to stringResource(R.string.engine_settings_ruffle_load_blocking),
+)
+
+/** 自动关闭分钟数：0 = 不自动关闭。 */
+@Composable
+internal fun ruffleScreenTimeoutOptions(): List<Pair<String, String>> =
+    EngineSettingsStore.RUFFLE_SCREEN_TIMEOUTS.map { minutes ->
+        minutes.toString() to if (minutes == 0) {
+            stringResource(R.string.engine_settings_ruffle_screen_timeout_off)
+        } else {
+            stringResource(R.string.engine_settings_ruffle_screen_timeout_minutes, minutes)
+        }
+    }
+
+@Composable
+internal fun ruffleBackendOptionsMap(): Map<String, String> = ruffleBackendOptions().toMap()
+
+@Composable
+internal fun ruffleQualityOptionsMap(): Map<String, String> = ruffleQualityOptions().toMap()
+
+@Composable
+internal fun ruffleScaleModeOptionsMap(): Map<String, String> = ruffleScaleModeOptions().toMap()
+
+@Composable
+internal fun ruffleLoadBehaviorOptionsMap(): Map<String, String> = ruffleLoadBehaviorOptions().toMap()
+
+@Composable
+internal fun ruffleScreenTimeoutOptionsMap(): Map<String, String> = ruffleScreenTimeoutOptions().toMap()
+
+// ───────────────────────── MAGES.（impacto）外置宿主 ─────────────────────────
+
+/** 日志等级：对齐上游 LogLevel；默认 warning。 */
+@Composable
+internal fun impactoLogLevelOptions(): List<Pair<String, String>> = listOf(
+    "off" to stringResource(R.string.engine_settings_impacto_log_off),
+    "fatal" to stringResource(R.string.engine_settings_impacto_log_fatal),
+    "error" to stringResource(R.string.engine_settings_impacto_log_error),
+    EngineSettingsStore.IMPACTO_LOG_LEVEL_WARNING to stringResource(R.string.engine_settings_impacto_log_warning),
+    "info" to stringResource(R.string.engine_settings_impacto_log_info),
+    "debug" to stringResource(R.string.engine_settings_impacto_log_debug),
+    "trace" to stringResource(R.string.engine_settings_impacto_log_trace),
+)
+
+@Composable
+internal fun impactoLogLevelOptionsMap(): Map<String, String> = impactoLogLevelOptions().toMap()
+
+/** 影片字幕轨：全部 / 仅翻译 / 仅卡拉 OK（引擎配置没有“全部关闭”的写法）。 */
+@Composable
+internal fun impactoSubtitlesOptions(): List<Pair<String, String>> = listOf(
+    EngineSettingsStore.IMPACTO_SUBTITLES_ALL to stringResource(R.string.engine_settings_impacto_subtitles_all),
+    "translation" to stringResource(R.string.engine_settings_impacto_subtitles_translation),
+    "karaoke" to stringResource(R.string.engine_settings_impacto_subtitles_karaoke),
+)
+
+@Composable
+internal fun impactoSubtitlesOptionsMap(): Map<String, String> = impactoSubtitlesOptions().toMap()
+
 // ───────────────────────── RPG Maker RGSS 外置模块 ─────────────────────────
 
 /** 窗口尺寸全为尺寸字面量，无需本地化。 */
@@ -436,3 +552,12 @@ internal fun rpgFontScaleOptionsMap(): Map<String, String> = rpgFontScaleOptions
 
 @Composable
 internal fun rpgVerticalAlignOptionsMap(): Map<String, String> = rpgVerticalAlignOptions().toMap()
+
+/** The core catalog adapts engine contributions to UI-only localized labels. */
+@Composable
+internal fun graphicsFilterOptions(): List<Pair<String, String>> =
+    GraphicsFilterCatalog.options(LocalConfiguration.current.locales[0].language)
+
+@Composable
+internal fun graphicsFilterCategoryTitle(category: GraphicsFilterCategory): String =
+    category.title(LocalConfiguration.current.locales[0].language)

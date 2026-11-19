@@ -1,5 +1,10 @@
 package com.tyranor.next.ui.settings
 
+import com.tyranor.next.ui.common.motion.BlurCrossfade
+import com.tyranor.next.ui.common.motion.ProvideEntrance
+import com.tyranor.next.ui.common.motion.breathing
+import com.tyranor.next.ui.common.motion.skipEntranceOnDrag
+import com.tyranor.next.ui.common.motion.staggeredEntrance
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -8,7 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.tyranor.next.ui.common.DialogTextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,35 +24,50 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tyranor.next.R
+import com.tyranor.next.core.settings.ImmutableFontImport
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.Dispatchers
 import com.tyranor.next.theme.DialogItemSurface
 import com.tyranor.next.ui.common.AppAlertDialog
 import com.tyranor.next.ui.common.AppNavItem
-import top.yukonga.miuix.kmp.preference.ArrowPreference
+import com.tyranor.next.ui.common.ArrowPreference
 
 /**
  * 字体导入单实现（m18）：统一的显示名解析 + 扩展名白名单校验 + 复制到私有字体目录。
  * 全局字体设置与单游戏覆盖共用，禁止各页面再复制平行实现。
  */
 internal object FontImport {
-    private val ALLOWED_EXTENSIONS = listOf(".ttf", ".ttc", ".otf", ".otc")
-
     /** 导入字体文件到 `filesDir/fonts`；扩展名非法或 IO 失败返回 null。 */
-    fun importToPrivate(context: Context, uri: Uri): String? = try {
-        val displayName = runCatching {
+    suspend fun importToPrivate(context: Context, uri: Uri): String? {
+        val coroutine = currentCoroutineContext()
+        return runInterruptible(Dispatchers.IO) { importBlocking(context, uri) { coroutine.ensureActive() } }
+    }
+
+    private fun importBlocking(context: Context, uri: Uri, checkCancelled: () -> Unit): String? = try {
+        val displayName = try {
             context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             }
-        }.getOrNull() ?: uri.lastPathSegment
+        } catch (cancelled: java.util.concurrent.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        } ?: uri.lastPathSegment
         val name = (displayName ?: "font.ttf").substringAfterLast('/').substringAfterLast('\\')
-        if (ALLOWED_EXTENSIONS.none { name.lowercase().endsWith(it) }) return null
         val dir = java.io.File(context.filesDir, "fonts")
-        if (!dir.isDirectory && !dir.mkdirs()) return null
-        val target = java.io.File(dir, name)
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        } ?: return null
-        target.absolutePath
-    } catch (_: Throwable) {
+        if (dir.canonicalFile != java.io.File(context.filesDir.canonicalFile, "fonts")) return null
+        ImmutableFontImport.import(
+            directory = dir,
+            displayName = name,
+            input = { context.contentResolver.openInputStream(uri) },
+            checkCancelled = checkCancelled,
+            validate = { android.graphics.Typeface.createFromFile(it) != null },
+        )
+    } catch (cancelled: java.util.concurrent.CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
         null
     }
 }
@@ -68,6 +88,7 @@ internal fun FontPreference(
     onFollow: () -> Unit,
     onPick: () -> Unit,
     valueInSummary: Boolean = false,
+    enabled: Boolean = true,
 ) {
     var open by remember { mutableStateOf(false) }
     ArrowPreference(
@@ -75,45 +96,56 @@ internal fun FontPreference(
         summary = if (valueInSummary) value else null,
         endActions = {
             if (!valueInSummary) {
-                Text(
-                    value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // 导入字体在途（入口禁用）时当前值缓缓明灭，导入结束平滑回到不透明；新值模糊替换
+                BlurCrossfade(value, Modifier.breathing(active = !enabled)) { shown ->
+                    Text(
+                        shown,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         },
-        onClick = { open = true },
+        enabled = enabled,
+        onClick = { if (enabled) open = true },
     )
     if (open) {
         AppAlertDialog(
             onDismissRequest = { open = false },
             title = { Text(label, style = MaterialTheme.typography.titleMedium) },
             text = {
+                // 两个选项依次弹入（与添加游戏弹窗同一写法）
+                ProvideEntrance {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().skipEntranceOnDrag(),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     AppNavItem(
+                        modifier = Modifier.staggeredEntrance(0),
                         title = followLabel,
                         leadingIcon = R.drawable.ic_font_bookmark,
                         containerColor = DialogItemSurface,
+                        indication = null,
                     ) {
                         onFollow()
                         open = false
                     }
                     AppNavItem(
+                        modifier = Modifier.staggeredEntrance(1),
                         title = stringResource(R.string.engine_settings_select_font_file),
                         leadingIcon = R.drawable.ic_font_bookmark,
                         containerColor = DialogItemSurface,
+                        indication = null,
                     ) {
                         open = false
                         onPick()
                     }
                 }
+                }
             },
-            confirmButton = { TextButton(onClick = { open = false }) { Text(stringResource(R.string.common_cancel)) } },
+            confirmButton = { DialogTextButton(text = stringResource(R.string.common_cancel), onClick = { open = false }) },
         )
     }
 }

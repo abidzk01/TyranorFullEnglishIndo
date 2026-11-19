@@ -7,26 +7,26 @@ import java.util.Locale
 
 /** Resolves launcher-facing engine text without changing the native engine's compatibility locale. */
 object EngineUiText {
-    /** Resolves [resourceId] in the launcher display language carried by [LaunchContract.UI_LANGUAGE_TAG]. */
     @JvmStatic
     fun get(context: Context?, resourceId: Int, vararg formatArgs: Any?): String {
         if (context == null) return ""
-        val localized = localizedContext(context)
         return try {
-            localized.getString(resourceId, *formatArgs)
+            localizedContext(context).getString(resourceId, *formatArgs)
         } catch (_: Throwable) {
             context.getString(resourceId, *formatArgs)
         }
     }
 
-    private fun localizedContext(context: Context): Context {
-        val languageTag = (context as? Activity)?.intent?.getStringExtra(LaunchContract.UI_LANGUAGE_TAG)
-        if (languageTag.isNullOrBlank()) return context
+    /** Resources for the host's UI language. The engine can keep its own game locale. */
+    @JvmStatic
+    fun localizedContext(context: Context): Context {
         return try {
+            val languageTag = (context as? Activity)?.intent?.getStringExtra(LaunchContract.UI_LANGUAGE_TAG)
+            if (languageTag.isNullOrBlank()) return context
             val configuration = Configuration(context.resources.configuration)
             configuration.setLocale(Locale.forLanguageTag(languageTag))
             context.createConfigurationContext(configuration)
-        } catch (_: Throwable) {
+        } catch (_: RuntimeException) {
             context
         }
     }

@@ -30,8 +30,10 @@ import android.view.ViewGroup;
 import org.libsdl.app.SDLActivity;
 
 import com.core.engine.DoubleBackExit;
+import com.core.engine.EngineSurfaceStartupController;
 import com.core.engine.LaunchContract;
 import com.core.engine.R;
+import com.core.nativeplugin.IjkRuntime;
 import com.core.ons.OnsLibLoader;
 import com.core.ons.OnsSettings;
 import com.core.ons.OnsVideoOverlay;
@@ -63,6 +65,7 @@ public class ONScripter extends SDLActivity {
     private boolean autoMode = false;
     /** 视频覆盖播放控制器：在本 Activity 窗口内覆盖播放，不启动独立 Activity。 */
     private OnsVideoOverlay videoOverlay;
+    private EngineSurfaceStartupController startupController;
     private native int nativeInitJavaCallbacks();
     private native int nativeGetWidth();
     private native int nativeGetHeight();
@@ -97,22 +100,34 @@ public class ONScripter extends SDLActivity {
         ignoreCutout = getIntent().getBooleanExtra(LaunchContract.IGNORE_CUTOUT, settings.ignoreCutout);
         // 提前加载/释放 assets：确保 libonsyuri 与内置 DroidSansFallback.ttf 在 SDLActivity 启动前可用。
         OnsLibLoader.load(this);
+        // IJK 三件套从运行库包按绝对路径加载；失败时视频覆盖层走既有失败收场路径。
+        IjkRuntime.load(this);
         ensureDefaultFont();
         super.onCreate(savedInstanceState);
         fixSurfaceCentering();  // 修复平板设备上画面不居中的问题
         try { nativeInitJavaCallbacks(); } catch (Throwable t) { Log.w(TAG, "nativeInitJavaCallbacks failed", t); }
         setupVirtualControls();
         fullscreen();
+        attachStartupOverlay();
+    }
+
+    private void attachStartupOverlay() {
+        if (mBrokenLibraries || mSurface == null || mLayout == null) return;
+        ViewGroup content = findViewById(android.R.id.content);
+        startupController = new EngineSurfaceStartupController(this);
+        startupController.attachTo(content != null ? content : mLayout, mSurface.getHolder());
     }
 
     @Override public void onResume() {
         super.onResume();
         fullscreen();
+        if (startupController != null) startupController.onResume();
         // 播片期间切后台会暂停解码，回到前台必须恢复，否则视频停在暂停帧。
         if (videoOverlay != null) videoOverlay.onHostResume();
     }
 
     @Override public void onPause() {
+        if (startupController != null) startupController.onPause();
         super.onPause();
         // 切后台时暂停解码：overlay 不随 Activity 销毁，回来还在。
         if (videoOverlay != null) videoOverlay.onHostPause();
@@ -120,6 +135,7 @@ public class ONScripter extends SDLActivity {
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        if (startupController != null) startupController.onWindowFocusChanged(hasFocus);
         if (hasFocus) fullscreen();
     }
 
@@ -537,6 +553,10 @@ public class ONScripter extends SDLActivity {
     @Override
     @SuppressLint("MissingSuperCall")
     public void onDestroy() {
+        if (startupController != null) {
+            startupController.dispose();
+            startupController = null;
+        }
         // 先收掉视频覆盖层：ijk 的 Surface/播放器必须在本进程被杀之前释放，
         // 否则 HWUI 渲染线程会操作已销毁的 SurfaceTexture，退出游戏时崩溃
         //（FORTIFY: pthread_mutex_lock called on a destroyed mutex / hwuiTask1 SIGABRT）。
@@ -605,6 +625,11 @@ public class ONScripter extends SDLActivity {
         setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
     }
 
+    @Override
+    public void setRequestedOrientation(int requestedOrientation) {
+        super.setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+    }
+
     private String normalizeRootPath(String value) {
         if (value == null) return null;
         String v = value.trim();
@@ -643,7 +668,9 @@ public class ONScripter extends SDLActivity {
         int colon = docId.indexOf(':');
         String volume = colon >= 0 ? docId.substring(0, colon) : docId;
         String rel = colon >= 0 ? docId.substring(colon + 1) : "";
-        if ("primary".equalsIgnoreCase(volume)) return "/storage/emulated/0" + (rel.isEmpty() ? "" : "/" + rel);
+        // document IDs come from the provider and are untrusted: reject traversal.
+        if (rel.indexOf('\\') >= 0 || java.util.Arrays.asList(rel.split("/")).contains("..")) return null;
+        if ("primary".equalsIgnoreCase(volume)) return bridge.PrimaryStorageRoot.get() + (rel.isEmpty() ? "" : "/" + rel);
         if (volume != null && !volume.isEmpty()) return "/storage/" + volume + (rel.isEmpty() ? "" : "/" + rel);
         return null;
     }

@@ -3,7 +3,14 @@ package com.tyranor.next.core.settings
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
+import androidx.annotation.VisibleForTesting
+import androidx.core.content.edit
+import com.tyranor.next.core.game.model.GameFilterOptions
+import com.tyranor.next.core.game.model.GameLibraryConditions
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * 应用设置存储层：与引擎无关的应用级偏好（如主题色、导航栏样式）。
@@ -11,18 +18,95 @@ import kotlinx.coroutines.flow.MutableStateFlow
  */
 object AppSettingsStore {
 
+    /** 临时关闭首次使用引导展示，待页面入口稳定后再恢复。 */
+    const val ONBOARDING_FEATURE_ENABLED = false
+
+    const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+
+    private const val ONBOARDING_PENDING_INITIAL_STATE_FILE = "onboarding_initial_state"
+
+    private var onboardingPreferences: OnboardingPreferences? = null
+
+    @Synchronized
+    private fun onboarding(context: Context): OnboardingPreferences =
+        onboardingPreferences ?: OnboardingPreferences(
+            settings = prefs(context),
+            pendingStateFile = File(context.applicationContext.filesDir, ONBOARDING_PENDING_INITIAL_STATE_FILE),
+        ).also { onboardingPreferences = it }
+
+    /** 在主进程的偏好迁移/游戏库预热前调用；显式 false 防止中途退出被识别为老用户。 */
+    fun initializeOnboarding(context: Context): OnboardingWriteResult {
+        val settings = prefs(context)
+        return onboarding(context).initialize {
+            hasExistingOnboardingData(
+                appSettingsHasData = settings.all.isNotEmpty(),
+                legacyPreferencesHaveData = listOf(
+                    AppStorageNames.ENGINE_PREFS,
+                    AppStorageNames.LEGACY_ENGINE_PREFS,
+                    AppStorageNames.GAME_SCANNER_PREFS,
+                ).any { name ->
+                    context.getSharedPreferences(name, Context.MODE_PRIVATE).all.isNotEmpty()
+                },
+                gameLibraryExists = context.getDatabasePath(AppStorageNames.GAME_LIBRARY_DATABASE).exists(),
+            )
+        }
+    }
+
+    /**
+     * Centralizes the legacy-install evidence used by [initializeOnboarding]. Keeping this
+     * decision pure makes the upgrade/first-install boundary directly regression-testable.
+     */
+    internal fun hasExistingOnboardingData(
+        appSettingsHasData: Boolean,
+        legacyPreferencesHaveData: Boolean,
+        gameLibraryExists: Boolean,
+    ): Boolean = appSettingsHasData || legacyPreferencesHaveData || gameLibraryExists
+
+    @VisibleForTesting
+    internal fun resetOnboardingForTests() {
+        onboardingPreferences = null
+    }
+
+    fun isOnboardingCompleted(context: Context): Boolean =
+        onboarding(context).isCompleted()
+
+    /** IO 线程调用；只有写入成功才能离开引导，失败允许用户重试。 */
+    fun setOnboardingCompleted(context: Context): OnboardingWriteResult =
+        onboarding(context).complete()
+
     const val KEY_THEME_COLOR = "theme_color"
     const val KEY_NAV_STYLE = "nav_style"
     const val KEY_LIQUID_GLASS_ENHANCE = "liquid_glass_enhance"
     const val KEY_APPEARANCE_STYLE = "appearance_style"
+    private const val KEY_DEFAULT_THEME_PARTICLES_ENABLED = "default_theme_particles_enabled"
+    private const val KEY_DEFAULT_THEME_PARTICLE_STYLE = "default_theme_particle_style"
+    private const val DEFAULT_THEME_PARTICLES_ENABLED = true
     const val KEY_SCAN_DEPTH = "scan_depth"
+    const val KEY_APP_CORNER_RADIUS = "app_corner_radius"
     const val KEY_LANGUAGE = "language"
     const val KEY_THEME_MODE = "theme_mode"
-    const val KEY_TONE_SWITCH = "tone_switch"
     const val KEY_GAME_SORT = "game_sort"
 
-    /** 首页样式：原生（最近打开/快捷启动）/ 网页 / 分类仓库。 */
+    /** 游戏页引擎筛选（存 `EngineType.name`；[GAME_FILTER_ENGINE_ALL] = 全部）。 */
+    const val KEY_GAME_FILTER_ENGINE = "game_filter_engine"
+
+    /** 游戏页游玩状态筛选（[GAME_FILTER_PLAYED_ALL] / [GAME_FILTER_PLAYED_ONLY] / [GAME_FILTER_PLAYED_NONE]）。 */
+    const val KEY_GAME_FILTER_PLAYED = "game_filter_played"
+
+    /** 已启用的第三方 APK 运行时模块包名集合；默认空集（新发现模块默认关闭）。 */
+    const val KEY_RUNTIME_MODULE_ENABLED = "runtime_module_enabled"
+
+    /** System4 一次性定点重检测迁移标志（纠正旧库中被误判为 XSYS35 的 System4 游戏）。 */
+    private const val KEY_MIGRATION_XSYS4_RESCAN_DONE = "migration_xsys4_rescan_done"
+
+    /** 首页样式：原生（最近打开/快捷启动）/ 网页。 */
     const val KEY_HOME_STYLE = "home_style"
+
+    /** 显示首页：关闭后首页与导航栏首页入口隐藏，游戏页作为第一页；默认开。 */
+    const val KEY_HOME_PAGE_ENABLED = "home_page_enabled"
+
+    /** 经典应用图标：开启后启动器显示旧版图标；默认关。 */
+    const val KEY_CLASSIC_ICON = "classic_icon_enabled"
 
     /** Web 首页展示的地址。 */
     const val KEY_HOME_WEB_URL = "home_web_url"
@@ -30,16 +114,21 @@ object AppSettingsStore {
     /** 游戏页卡片隐藏名称标签（【】/[]）；默认开。 */
     const val KEY_GAME_CARD_HIDE_TITLE_TAG = "game_card_hide_title_tag"
 
-    /** 游戏页卡片风格：网格 / 列表（封面流）；默认网格。 */
+    /** 游戏页卡片风格：瀑布（默认）/ 网格 / 列表（封面流）。 */
     const val KEY_GAME_CARD_STYLE = "game_card_style"
 
     /** 游戏页卡片左上角引擎类型角标；默认关。 */
     const val KEY_GAME_CARD_BADGE = "game_card_badge"
 
-    /** 默认外观风格的页面背景渐变（纯色+柔光/颜色渐变）；默认开。 */
-    const val KEY_DEFAULT_THEME_GRADIENT = "default_theme_gradient"
     const val KEY_ENGINE_TABS = "engine_tabs"
+
+    /** 引擎页条目左侧图标（引擎横幅图）开关；默认开。 */
+    const val KEY_ENGINE_CARD_ICON = "engine_card_icon"
     const val KEY_SIDE_RAIL = "side_rail"
+
+    /** 界面动效档位：true = 增强（默认），false = 普通。 */
+    const val KEY_MOTION_ENHANCED = "motion_enhanced"
+    const val DEFAULT_MOTION_ENHANCED = true
     const val KEY_COVER_SCRAPER_ONLY_MISSING = "cover_scraper_only_missing"
     const val KEY_COVER_SCRAPER_SOURCE_ORDER = "cover_scraper_source_order"
     private const val KEY_COVER_SCRAPER_SOURCE_ENABLED_PREFIX = "cover_scraper_source_enabled_"
@@ -54,7 +143,7 @@ object AppSettingsStore {
     const val COVER_SOURCE_BANGUMI = "bangumi"
     const val COVER_SOURCE_STEAM = "steam"
     const val COVER_SOURCE_VNDB = "vndb"
-    /** 未萌 NextMoe（鲲 Galgame 论坛）：匿名来源，无需登录。 */
+    /** 未萌 NextMoe（鲲 Galgame 论坛）：支持匿名刮削，游玩状态等需登录功能使用 OAuth。 */
     const val COVER_SOURCE_NEXTMOE = "nextmoe"
     const val COVER_SOURCE_LOCAL = "local"
     const val COVER_SOURCE_CUSTOM = "custom"
@@ -100,32 +189,44 @@ object AppSettingsStore {
     /** 文件夹扫描深度默认值（层级，1..5）。 */
     const val DEFAULT_SCAN_DEPTH = 3
 
-    /** 色调切换默认关闭：中性灰页面背景 + 白色组件。 */
-    const val DEFAULT_TONE_SWITCH_ENABLED = false
+    /** 应用统一圆角可选档位（dp）：5..50，步长 5，共十档。 */
+    val APP_CORNER_RADIUS_STEPS: List<Int> = listOf(5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
 
-    /** 游戏排序：按标题字母/字符顺序。 */
-    const val GAME_SORT_ALPHA = "alpha"
+    /** 应用统一圆角默认值（dp）：15dp 档。 */
+    const val DEFAULT_APP_CORNER_RADIUS = 15
 
-    /** 游戏排序：按标题中 【】/[] 标签内容分组。 */
-    const val GAME_SORT_BRACKET_TAG = "bracket_tag"
+    const val GAME_SORT_ALPHA = GameFilterOptions.GAME_SORT_ALPHA
+    const val GAME_SORT_BRACKET_TAG = GameFilterOptions.GAME_SORT_BRACKET_TAG
+    const val GAME_SORT_ENGINE = GameFilterOptions.GAME_SORT_ENGINE
+    const val GAME_SORT_RECENT = GameFilterOptions.GAME_SORT_RECENT
+    const val GAME_FILTER_ENGINE_ALL = GameFilterOptions.GAME_FILTER_ENGINE_ALL
+    const val GAME_FILTER_PLAYED_ALL = GameFilterOptions.GAME_FILTER_PLAYED_ALL
+    const val GAME_FILTER_PLAYED_ONLY = GameFilterOptions.GAME_FILTER_PLAYED_ONLY
+    const val GAME_FILTER_PLAYED_NONE = GameFilterOptions.GAME_FILTER_PLAYED_NONE
 
     /** 卡片隐藏名称标签默认值：开。 */
     const val DEFAULT_GAME_CARD_HIDE_TITLE_TAG = true
 
-    const val GAME_CARD_STYLE_GRID = "grid"
+    /** 瀑布流（默认）：封面高低错落，标题在封面下方白色信息区内。 */
+    const val GAME_CARD_STYLE_WATERFALL = "waterfall"
+
+    /** 网格：恢复瀑布流之前的等高卡片（3:4 封面 + 封面下方单行标题）。 */
+    const val GAME_CARD_STYLE_GRID = "uniform_grid"
+
+    /** 列表：封面流横向轮播。 */
     const val GAME_CARD_STYLE_COVER_FLOW = "cover_flow"
 
-    /** 卡片风格默认值：网格。 */
-    const val DEFAULT_GAME_CARD_STYLE = GAME_CARD_STYLE_GRID
+    /** 卡片风格默认值：瀑布。 */
+    const val DEFAULT_GAME_CARD_STYLE = GAME_CARD_STYLE_WATERFALL
 
     /** 卡片引擎角标默认值：关。 */
     const val DEFAULT_GAME_CARD_BADGE = false
 
-    /** 默认主题渐变默认值：开（应用设置可关闭，回退纯色页面背景）。 */
-    const val DEFAULT_DEFAULT_THEME_GRADIENT = true
-
-    /** 底部导航栏样式：默认（Material3 导航栏）。 */
-    const val NAV_STYLE_DEFAULT = "default"
+    /**
+     * 底部导航栏样式：经典 MD（Material3 导航栏）。
+     * 持久化值沿用历史的 `"default"`：此前显式选过「默认」的用户升级后保持原样，不被静默改样式。
+     */
+    const val NAV_STYLE_CLASSIC_MD = "default"
 
     /** 底部导航栏样式：液态玻璃（圆角玻璃栏，Android 12+ 生效）。 */
     const val NAV_STYLE_LIQUID_GLASS = "liquid_glass"
@@ -136,23 +237,38 @@ object AppSettingsStore {
     /** 底部导航栏样式：悬浮按钮（右下角圆形玻璃按钮，点击沿 1/4 圆弧展开四项）。 */
     const val NAV_STYLE_FLOATING_BUTTON = "floating_button"
 
+    // 暂停提供悬浮按钮导航，保留已保存的样式和位置。
+    internal const val FLOATING_NAV_ENABLED = false
+
+    /**
+     * 导航栏样式「未显式设置」：仅作内存态 / 归一化结果，**不会持久化**。
+     * 实际样式由 [resolveNavStyle] 解析，三个外观主题统一默认使用液态玻璃 · 经典。
+     */
+    const val NAV_STYLE_AUTO = "auto"
+
     /** 首页样式：原生首页（最近打开 + 快捷启动）。 */
     const val HOME_STYLE_NATIVE = "native"
 
     /** 首页样式：Web 首页（内置 WebView 展示所选网址）。 */
     const val HOME_STYLE_WEB = "web"
 
-    /** 首页样式：分类仓库（分类栏：全部/快捷/最近/各引擎类型 + 游戏页同款网格）。 */
-    const val HOME_STYLE_CATEGORY = "category"
-
     /** 首页样式默认值：原生。 */
     const val DEFAULT_HOME_STYLE = HOME_STYLE_NATIVE
+
+    /** 显示首页默认值：开。 */
+    const val DEFAULT_HOME_PAGE_ENABLED = true
+
+    /** 经典应用图标默认值：关（使用当前新图标）。 */
+    const val DEFAULT_CLASSIC_ICON = false
 
     /** Web 首页预设：鲲Gal。 */
     const val HOME_WEB_URL_KUNGAL = "https://www.kungal.com"
 
     /** Web 首页预设：一起萌。 */
     const val HOME_WEB_URL_LETMOE = "https://www.letmoe.com"
+
+    /** Web 首页预设：小鸟游。 */
+    const val HOME_WEB_URL_TAKANASHI = "https://t-satoru.top"
 
     /** Web 首页默认地址：一起萌。 */
     const val DEFAULT_HOME_WEB_URL = HOME_WEB_URL_LETMOE
@@ -162,10 +278,14 @@ object AppSettingsStore {
         get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
     /** 导航栏样式内存态：随设置页切换即时广播，供 MainScreen 重组切换样式。 */
-    val navStyleState: MutableStateFlow<String> = MutableStateFlow(NAV_STYLE_DEFAULT)
+    val navStyleState: MutableStateFlow<String> =
+        MutableStateFlow(NAV_STYLE_AUTO)
 
     /** 引擎页分类显示默认关闭：关闭时平铺展示全部引擎项，开启后按 GAL/RPGM/主机/网页 分页。 */
     const val DEFAULT_ENGINE_TABS_ENABLED = false
+
+    /** 引擎页条目左侧图标默认开启：关闭后条目只显示引擎名与状态图标。 */
+    const val DEFAULT_ENGINE_CARD_ICON = true
 
     /** 平板侧边栏默认开启：平板/大窗口下主导航移到侧边，关闭则保持底部导航。 */
     const val DEFAULT_SIDE_RAIL_ENABLED = true
@@ -173,11 +293,20 @@ object AppSettingsStore {
     /** 平板侧边栏内存态：设置页切换后主界面即时重组（平板判定 + 本开关决定是否用侧栏）。 */
     val sideRailState: MutableStateFlow<Boolean> = MutableStateFlow(DEFAULT_SIDE_RAIL_ENABLED)
 
+    /** 界面动效档位内存态：应用设置切换后全局即时生效。 */
+    val motionEnhancedState: MutableStateFlow<Boolean> = MutableStateFlow(DEFAULT_MOTION_ENHANCED)
+
     /** 引擎页分类显示内存态：设置页切换后引擎页即时重组。 */
     val engineTabsState: MutableStateFlow<Boolean> = MutableStateFlow(DEFAULT_ENGINE_TABS_ENABLED)
 
-    /** 游戏排序内存态：设置页切换后游戏页可随重组读取。 */
-    val gameSortState: MutableStateFlow<String> = MutableStateFlow(GAME_SORT_ALPHA)
+    /** 引擎页条目左侧图标内存态：设置页切换后引擎页即时重组。 */
+    val engineCardIconState: MutableStateFlow<Boolean> = MutableStateFlow(DEFAULT_ENGINE_CARD_ICON)
+
+    private val gameConditionsLock = Any()
+    private val mutableGameConditions = MutableStateFlow(GameLibraryConditions())
+
+    /** 游戏页抽屉与设置页共用的排序和筛选快照，重置时一次发布。 */
+    internal val gameConditions = mutableGameConditions.asStateFlow()
 
     /** 卡片隐藏名称标签内存态：设置页切换后游戏页卡片即时重组。 */
     val gameCardTitleTagState: MutableStateFlow<Boolean> = MutableStateFlow(DEFAULT_GAME_CARD_HIDE_TITLE_TAG)
@@ -188,11 +317,20 @@ object AppSettingsStore {
     /** 卡片引擎角标内存态：设置页切换后游戏页卡片即时重组。 */
     val gameCardBadgeState: MutableStateFlow<Boolean> = MutableStateFlow(DEFAULT_GAME_CARD_BADGE)
 
-    /** 默认主题渐变内存态：设置页切换后页面背景即时重组。 */
-    val defaultThemeGradientState: MutableStateFlow<Boolean> = MutableStateFlow(DEFAULT_DEFAULT_THEME_GRADIENT)
-
-    /** 首页样式内存态：设置页切换后主界面首页即时切换原生/网页/分类仓库形态。 */
+    /** 首页样式内存态：设置页切换后主界面首页即时切换原生/网页形态。 */
     val homeStyleState: MutableStateFlow<String> = MutableStateFlow(DEFAULT_HOME_STYLE)
+
+    /** 首页显示内存态：设置页切换后主导航即时隐藏/恢复首页入口。 */
+    val homePageEnabledState: MutableStateFlow<Boolean> = MutableStateFlow(DEFAULT_HOME_PAGE_ENABLED)
+
+    private val mutableDefaultThemeParticlesEnabled = MutableStateFlow(DEFAULT_THEME_PARTICLES_ENABLED)
+    val defaultThemeParticlesEnabled = mutableDefaultThemeParticlesEnabled.asStateFlow()
+
+    private val mutableDefaultThemeParticleStyle = MutableStateFlow(DefaultThemeParticleStyle.RISING_BUBBLES)
+    internal val defaultThemeParticleStyle = mutableDefaultThemeParticleStyle.asStateFlow()
+
+    /** 经典应用图标内存态：设置页切换后由 [AppIconSwitcher] 同步启动器别名。 */
+    val classicIconEnabledState: MutableStateFlow<Boolean> = MutableStateFlow(DEFAULT_CLASSIC_ICON)
 
     /** Web 首页地址内存态：设置页修改后网页首页即时加载新地址。 */
     val homeWebUrlState: MutableStateFlow<String> = MutableStateFlow(DEFAULT_HOME_WEB_URL)
@@ -228,7 +366,7 @@ object AppSettingsStore {
         // 用 contains 而不是 getBoolean：旧键存在但值为 false 时也要清掉，否则它永远留在磁盘上
         if (!p.contains(KEY_LIQUID_GLASS_ENHANCE)) return
         val legacyEnhanced = p.getBoolean(KEY_LIQUID_GLASS_ENHANCE, false)
-        val stored = p.getString(KEY_NAV_STYLE, NAV_STYLE_DEFAULT)
+        val stored = p.getString(KEY_NAV_STYLE, null)
         val editor = p.edit().remove(KEY_LIQUID_GLASS_ENHANCE)
         if (legacyEnhanced && stored == NAV_STYLE_LIQUID_GLASS) {
             // 与 setNavStyle 一致地归一化：低版本设备读到备份里的透镜档时降为经典档
@@ -244,8 +382,11 @@ object AppSettingsStore {
         languageState.value = getLanguage(c)
     }
 
-    fun initGameSort(c: Context) {
-        gameSortState.value = getGameSort(c)
+    /** 主进程在 Application 启动阶段调用，恢复条件后页面才会创建。 */
+    internal fun initGameConditions(c: Context) {
+        synchronized(gameConditionsLock) {
+            mutableGameConditions.value = decodeGameConditions(prefs(c).all)
+        }
     }
 
     /** 首次组合时从持久化加载引擎页分类显示开关到内存态（幂等）。 */
@@ -253,13 +394,30 @@ object AppSettingsStore {
         engineTabsState.value = isEngineTabsEnabled(c)
     }
 
+    /** 首次组合时从持久化加载引擎页条目图标开关到内存态（幂等）。 */
+    fun initEngineCardIcon(c: Context) {
+        engineCardIconState.value = isEngineCardIconEnabled(c)
+    }
+
     /** 首次组合时从持久化加载平板侧边栏开关到内存态（幂等）。 */
     fun initSideRail(c: Context) {
         sideRailState.value = isSideRailEnabled(c)
     }
 
+    fun initMotionEnhanced(c: Context) {
+        motionEnhancedState.value = isMotionEnhanced(c)
+    }
+
     private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
+        context.applicationContext.getSharedPreferences(AppStorageNames.APP_SETTINGS_PREFS, Context.MODE_PRIVATE)
+
+    /** System4 一次性定点重检测迁移：读取标志。 */
+    fun isXs4RescanMigrationDone(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_MIGRATION_XSYS4_RESCAN_DONE, false)
+
+    /** 同步写（commit）：迁移在 IO 线程执行，标志落盘后才视为完成。 */
+    fun markXs4RescanMigrationDone(c: Context): Boolean =
+        prefs(c).edit().putBoolean(KEY_MIGRATION_XSYS4_RESCAN_DONE, true).commit()
 
     /** 当前主题色 HEX（#RRGGBB）。 */
     fun getThemeColorHex(c: Context): String =
@@ -277,11 +435,14 @@ object AppSettingsStore {
         languageState.value = normalized
     }
 
-    /** 当前底部导航栏样式（默认 / 经典 / 透镜）。 */
+    /**
+     * 用户显式选择的底部导航栏样式（经典 MD / 液态玻璃经典 / 透镜 / 悬浮按钮）；
+     * 从未设置过时为 [NAV_STYLE_AUTO]，须经 [resolveNavStyle] 解析为统一默认样式后使用。
+     */
     fun getNavStyle(c: Context): String =
         synchronized(navStyleLock) {
             normalizeNavStyle(
-                stored = prefs(c).getString(KEY_NAV_STYLE, NAV_STYLE_DEFAULT),
+                stored = prefs(c).getString(KEY_NAV_STYLE, null),
                 enhancedSupported = supportsLiquidGlassEnhanced,
             )
         }
@@ -289,25 +450,42 @@ object AppSettingsStore {
     fun setNavStyle(c: Context, style: String) {
         val normalized = normalizeNavStyle(style, supportsLiquidGlassEnhanced)
         synchronized(navStyleLock) {
-            prefs(c).edit().putString(KEY_NAV_STYLE, normalized).apply()
+            // AUTO 不落盘：清掉显式选择，回到统一默认样式。
+            prefs(c).edit().apply {
+                if (normalized == NAV_STYLE_AUTO) remove(KEY_NAV_STYLE) else putString(KEY_NAV_STYLE, normalized)
+            }.apply()
             navStyleState.value = normalized
         }
     }
 
     /**
      * 导航样式归一化（纯函数，便于单元测试）：
-     * 未知值回退默认；透镜档在不支持的版本（< Android 13）回退普通档——
+     * 缺省 / 未知值归为 [NAV_STYLE_AUTO]（未显式设置）；透镜档在不支持的版本（< Android 13）回退普通档——
      * 这样即使从更新的设备备份恢复数据，旧设备也只会得到普通档而不是降级画面。
-     * 悬浮按钮在低版本走实底降级（组件内处理），不参与归一化降级。
+     * 暂停提供悬浮按钮时，旧配置读为液态玻璃 · 经典。
      */
     fun normalizeNavStyle(stored: String?, enhancedSupported: Boolean): String =
         when (stored) {
+            NAV_STYLE_CLASSIC_MD -> NAV_STYLE_CLASSIC_MD
             NAV_STYLE_LIQUID_GLASS -> NAV_STYLE_LIQUID_GLASS
             NAV_STYLE_LIQUID_GLASS_ENHANCED ->
                 if (enhancedSupported) NAV_STYLE_LIQUID_GLASS_ENHANCED else NAV_STYLE_LIQUID_GLASS
-            NAV_STYLE_FLOATING_BUTTON -> NAV_STYLE_FLOATING_BUTTON
-            else -> NAV_STYLE_DEFAULT
+            NAV_STYLE_FLOATING_BUTTON ->
+                if (FLOATING_NAV_ENABLED) NAV_STYLE_FLOATING_BUTTON else NAV_STYLE_LIQUID_GLASS
+            else -> NAV_STYLE_AUTO
         }
+
+    /**
+     * 三个外观主题的未显式设置值统一解析为液态玻璃 · 经典。
+     * 显式选择只做版本兼容归一化，不随外观主题改变。
+     */
+    fun resolveNavStyle(style: String, enhancedSupported: Boolean): String {
+        val normalized = normalizeNavStyle(style, enhancedSupported)
+        return when {
+            normalized != NAV_STYLE_AUTO -> normalized
+            else -> NAV_STYLE_LIQUID_GLASS
+        }
+    }
 
     /** 悬浮按钮导航位置键：归一化 "x,y"（0..1，相对安全区内可拖动范围）。 */
     const val KEY_FLOATING_NAV_POS = "floating_nav_pos"
@@ -348,7 +526,7 @@ object AppSettingsStore {
         return x.coerceIn(0f, 1f) to y.coerceIn(0f, 1f)
     }
 
-    /** 当前外观风格（默认 / 复古玻璃 / 高级玻璃；未知值归一为默认）。 */
+    /** 当前外观风格（默认 / 复古玻璃；未知值归一为默认）。 */
     fun getAppearanceStyle(c: Context): AppearanceStyle =
         AppearanceStyle.fromStorage(prefs(c).getString(KEY_APPEARANCE_STYLE, null))
 
@@ -362,6 +540,21 @@ object AppSettingsStore {
     fun setScanDepth(c: Context, depth: Int) =
         prefs(c).edit().putInt(KEY_SCAN_DEPTH, depth.coerceIn(1, 5)).apply()
 
+    /**
+     * 应用统一圆角归一：吸附到 [APP_CORNER_RADIUS_STEPS] 中最近的档位
+     * （纯函数，便于 JVM 单测；非法/越界值同样收敛到档位内）。
+     */
+    fun normalizeAppCornerRadius(value: Int): Int =
+        APP_CORNER_RADIUS_STEPS.minByOrNull { kotlin.math.abs(it.toLong() - value) }
+            ?: DEFAULT_APP_CORNER_RADIUS
+
+    fun getAppCornerRadius(c: Context): Int =
+        normalizeAppCornerRadius(prefs(c).getInt(KEY_APP_CORNER_RADIUS, DEFAULT_APP_CORNER_RADIUS))
+
+    fun setAppCornerRadius(c: Context, radius: Int) {
+        prefs(c).edit().putInt(KEY_APP_CORNER_RADIUS, normalizeAppCornerRadius(radius)).apply()
+    }
+
     /** 首次组合时从持久化加载「卡片隐藏名称标签」到内存态（幂等）。 */
     fun initGameCardHideTitleTag(c: Context) {
         gameCardTitleTagState.value = isGameCardHideTitleTag(c)
@@ -373,20 +566,6 @@ object AppSettingsStore {
     fun setGameCardHideTitleTag(c: Context, hidden: Boolean) {
         prefs(c).edit().putBoolean(KEY_GAME_CARD_HIDE_TITLE_TAG, hidden).apply()
         gameCardTitleTagState.value = hidden
-    }
-
-    /** 首次组合时从持久化加载「卡片风格」到内存态（幂等）。 */
-    /** 首次组合时从持久化加载「默认主题渐变」到内存态（幂等）。 */
-    fun initDefaultThemeGradient(c: Context) {
-        defaultThemeGradientState.value = isDefaultThemeGradientEnabled(c)
-    }
-
-    fun isDefaultThemeGradientEnabled(c: Context): Boolean =
-        prefs(c).getBoolean(KEY_DEFAULT_THEME_GRADIENT, DEFAULT_DEFAULT_THEME_GRADIENT)
-
-    fun setDefaultThemeGradientEnabled(c: Context, enabled: Boolean) {
-        prefs(c).edit().putBoolean(KEY_DEFAULT_THEME_GRADIENT, enabled).apply()
-        defaultThemeGradientState.value = enabled
     }
 
     /** 首次组合时从持久化加载「卡片引擎角标」到内存态（幂等）。 */
@@ -402,10 +581,22 @@ object AppSettingsStore {
         }
     }
 
-    /** 首页样式归一：web / category 精确接受，其余（含空/未知）回退原生（纯函数，便于单测）。 */
+    /** 首次组合时从持久化加载首页显示开关到内存态（幂等）。 */
+    fun initHomePageEnabled(c: Context) {
+        homePageEnabledState.value = isHomePageEnabled(c)
+    }
+
+    /** 启动/设置页读取时把经典应用图标开关同步到内存态（幂等）。 */
+    fun initClassicIcon(c: Context) {
+        classicIconEnabledState.value = isClassicIconEnabled(c)
+    }
+
+    /**
+     * 首页样式归一：仅 web 精确接受，其余（含空/未知/历史值 "category"）回退原生
+     * （纯函数，便于单测）。
+     */
     fun normalizeHomeStyle(style: String?): String = when (style) {
         HOME_STYLE_WEB -> HOME_STYLE_WEB
-        HOME_STYLE_CATEGORY -> HOME_STYLE_CATEGORY
         else -> HOME_STYLE_NATIVE
     }
 
@@ -418,6 +609,44 @@ object AppSettingsStore {
             prefs(c).edit().putString(KEY_HOME_STYLE, normalized).apply()
             homeStyleState.value = normalized
         }
+    }
+
+    /** 是否显示首页（关闭后首页不参与主导航）。 */
+    fun isHomePageEnabled(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_HOME_PAGE_ENABLED, DEFAULT_HOME_PAGE_ENABLED)
+
+    fun setHomePageEnabled(c: Context, enabled: Boolean) {
+        prefs(c).edit().putBoolean(KEY_HOME_PAGE_ENABLED, enabled).apply()
+        homePageEnabledState.value = enabled
+    }
+
+    internal fun initDefaultThemeParticles(c: Context) {
+        val settings = prefs(c)
+        mutableDefaultThemeParticlesEnabled.value =
+            settings.getBoolean(KEY_DEFAULT_THEME_PARTICLES_ENABLED, DEFAULT_THEME_PARTICLES_ENABLED)
+        val storedStyle = settings.getString(KEY_DEFAULT_THEME_PARTICLE_STYLE, null)
+        mutableDefaultThemeParticleStyle.value =
+            DefaultThemeParticleStyle.entries.firstOrNull { it.storedValue == storedStyle }
+                ?: DefaultThemeParticleStyle.RISING_BUBBLES
+    }
+
+    fun setDefaultThemeParticlesEnabled(c: Context, enabled: Boolean) {
+        prefs(c).edit { putBoolean(KEY_DEFAULT_THEME_PARTICLES_ENABLED, enabled) }
+        mutableDefaultThemeParticlesEnabled.value = enabled
+    }
+
+    internal fun setDefaultThemeParticleStyle(c: Context, style: DefaultThemeParticleStyle) {
+        prefs(c).edit { putString(KEY_DEFAULT_THEME_PARTICLE_STYLE, style.storedValue) }
+        mutableDefaultThemeParticleStyle.value = style
+    }
+
+    /** 是否使用经典应用图标（旧版图标）；启动器别名状态由 [AppIconSwitcher] 负责。 */
+    fun isClassicIconEnabled(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_CLASSIC_ICON, DEFAULT_CLASSIC_ICON)
+
+    fun setClassicIconEnabled(c: Context, enabled: Boolean) {
+        prefs(c).edit().putBoolean(KEY_CLASSIC_ICON, enabled).apply()
+        classicIconEnabledState.value = enabled
     }
 
     /** 当前 Web 首页地址；磁盘值非法/为空时回退默认（一起萌）。 */
@@ -449,9 +678,14 @@ object AppSettingsStore {
     fun getGameCardStyle(c: Context): String =
         normalizeGameCardStyle(prefs(c).getString(KEY_GAME_CARD_STYLE, DEFAULT_GAME_CARD_STYLE))
 
-    /** 卡片风格归一：仅接受 cover_flow / grid，其余（含空）回退网格。 */
+    /** 卡片风格归一：仅接受 waterfall / uniform_grid / cover_flow；历史值 grid 与空值回退瀑布。 */
     fun normalizeGameCardStyle(style: String?): String =
-        if (style?.trim()?.lowercase() == GAME_CARD_STYLE_COVER_FLOW) GAME_CARD_STYLE_COVER_FLOW else GAME_CARD_STYLE_GRID
+        when (style?.trim()?.lowercase()) {
+            GAME_CARD_STYLE_GRID -> GAME_CARD_STYLE_GRID
+            GAME_CARD_STYLE_COVER_FLOW -> GAME_CARD_STYLE_COVER_FLOW
+            // 历史值 "grid"（当时渲染瀑布流）与空值/未知值统一归一到瀑布，避免升级后样式跳变
+            else -> GAME_CARD_STYLE_WATERFALL
+        }
 
     fun setGameCardStyle(c: Context, style: String) {
         val normalized = normalizeGameCardStyle(style)
@@ -459,19 +693,48 @@ object AppSettingsStore {
         gameCardStyleState.value = normalized
     }
 
-    fun getGameSort(c: Context): String =
-        when (prefs(c).getString(KEY_GAME_SORT, GAME_SORT_ALPHA)) {
-            GAME_SORT_BRACKET_TAG -> GAME_SORT_BRACKET_TAG
-            else -> GAME_SORT_ALPHA
-        }
-
     fun setGameSort(c: Context, sort: String) {
-        val normalized = when (sort) {
-            GAME_SORT_BRACKET_TAG -> GAME_SORT_BRACKET_TAG
-            else -> GAME_SORT_ALPHA
+        updateGameConditions(c) { it.copy(sortMode = normalizeGameSort(sort)) }
+    }
+
+    fun setGameFilterEngine(c: Context, engine: String) {
+        updateGameConditions(c) { it.copy(engineFilter = GameFilterOptions.normalizeEngineFilter(engine)) }
+    }
+
+    fun setGameFilterPlayed(c: Context, played: String) {
+        updateGameConditions(c) { it.copy(playedFilter = normalizeGameFilterPlayed(played)) }
+    }
+
+    fun resetGameConditions(c: Context) {
+        updateGameConditions(c) { GameLibraryConditions() }
+    }
+
+    private fun updateGameConditions(c: Context, transform: (GameLibraryConditions) -> GameLibraryConditions) {
+        synchronized(gameConditionsLock) {
+            val next = transform(mutableGameConditions.value)
+            prefs(c).edit()
+                .putString(KEY_GAME_SORT, next.sortMode)
+                .putString(KEY_GAME_FILTER_ENGINE, next.engineFilter)
+                .putString(KEY_GAME_FILTER_PLAYED, next.playedFilter)
+                .apply()
+            mutableGameConditions.value = next
         }
-        prefs(c).edit().putString(KEY_GAME_SORT, normalized).apply()
-        gameSortState.value = normalized
+    }
+
+    internal fun decodeGameConditions(values: Map<String, *>): GameLibraryConditions = GameLibraryConditions(
+        sortMode = normalizeGameSort(values[KEY_GAME_SORT] as? String),
+        engineFilter = GameFilterOptions.normalizeEngineFilter(values[KEY_GAME_FILTER_ENGINE] as? String),
+        playedFilter = normalizeGameFilterPlayed(values[KEY_GAME_FILTER_PLAYED] as? String),
+    )
+
+    private fun normalizeGameSort(sort: String?): String = when (val value = sort.orEmpty()) {
+        GAME_SORT_BRACKET_TAG, GAME_SORT_ENGINE, GAME_SORT_RECENT -> value
+        else -> GAME_SORT_ALPHA
+    }
+
+    private fun normalizeGameFilterPlayed(played: String?): String = when (val value = played.orEmpty()) {
+        GAME_FILTER_PLAYED_ONLY, GAME_FILTER_PLAYED_NONE -> value
+        else -> GAME_FILTER_PLAYED_ALL
     }
 
     /** 引擎页是否按分类（GAL / RPGM / 主机 / 网页）分页展示。 */
@@ -483,6 +746,15 @@ object AppSettingsStore {
         engineTabsState.value = enabled
     }
 
+    /** 引擎页条目是否显示左侧图标（引擎横幅图）。 */
+    fun isEngineCardIconEnabled(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_ENGINE_CARD_ICON, DEFAULT_ENGINE_CARD_ICON)
+
+    fun setEngineCardIconEnabled(c: Context, enabled: Boolean) {
+        prefs(c).edit().putBoolean(KEY_ENGINE_CARD_ICON, enabled).apply()
+        engineCardIconState.value = enabled
+    }
+
     /** 平板/大窗口下是否使用侧边导航（默认开）。 */
     fun isSideRailEnabled(c: Context): Boolean =
         prefs(c).getBoolean(KEY_SIDE_RAIL, DEFAULT_SIDE_RAIL_ENABLED)
@@ -490,6 +762,14 @@ object AppSettingsStore {
     fun setSideRailEnabled(c: Context, enabled: Boolean) {
         prefs(c).edit().putBoolean(KEY_SIDE_RAIL, enabled).apply()
         sideRailState.value = enabled
+    }
+
+    fun isMotionEnhanced(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_MOTION_ENHANCED, DEFAULT_MOTION_ENHANCED)
+
+    fun setMotionEnhanced(c: Context, enhanced: Boolean) {
+        prefs(c).edit().putBoolean(KEY_MOTION_ENHANCED, enhanced).apply()
+        motionEnhancedState.value = enhanced
     }
 
     fun isCoverScraperOnlyMissing(c: Context): Boolean =
@@ -553,13 +833,6 @@ object AppSettingsStore {
     fun setThemeMode(c: Context, mode: String) =
         prefs(c).edit().putString(KEY_THEME_MODE, mode).apply()
 
-    /** 色调切换：开启时使用白色页面背景 + 中性灰组件；关闭时使用中性灰页面背景 + 白色组件。 */
-    fun isToneSwitchEnabled(c: Context): Boolean =
-        prefs(c).getBoolean(KEY_TONE_SWITCH, DEFAULT_TONE_SWITCH_ENABLED)
-
-    fun setToneSwitchEnabled(c: Context, enabled: Boolean) =
-        prefs(c).edit().putBoolean(KEY_TONE_SWITCH, enabled).apply()
-
     /** 系统当前是否深色模式（资源配置 uiMode）。 */
     fun isSystemDark(c: Context): Boolean =
         (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
@@ -573,7 +846,26 @@ object AppSettingsStore {
     }
 
     private fun bumpCoverScraperSettingsVersion() {
-        coverScraperSettingsVersion.value += 1
+        coverScraperSettingsVersion.update { it + 1 }
+    }
+
+    /** 已启用的第三方 APK 运行时模块包名集合；始终返回副本，调用方可安全修改。 */
+    fun getEnabledRuntimeModules(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_RUNTIME_MODULE_ENABLED, emptySet())?.toSet().orEmpty()
+
+    /** 按包名增删启用状态；空包名忽略，未发生变更时不写盘。 */
+    fun setRuntimeModuleEnabled(context: Context, packageName: String, enabled: Boolean) {
+        val target = packageName.trim()
+        if (target.isEmpty()) return
+        val current = getEnabledRuntimeModules(context).toMutableSet()
+        val changed = if (enabled) current.add(target) else current.remove(target)
+        if (!changed) return
+        prefs(context).edit().putStringSet(KEY_RUNTIME_MODULE_ENABLED, current).apply()
+    }
+
+    fun isRuntimeModuleEnabled(context: Context, packageName: String): Boolean {
+        val target = packageName.trim()
+        return target.isNotEmpty() && target in getEnabledRuntimeModules(context)
     }
 
     /** 语言归一:system / zh / ja / en / id 精确接受,其余(含空/未知)回退英文默认。 */

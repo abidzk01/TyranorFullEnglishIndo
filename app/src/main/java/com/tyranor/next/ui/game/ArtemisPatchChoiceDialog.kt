@@ -6,20 +6,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tyranor.next.R
 import com.tyranor.next.core.game.launch.EngineLauncher
 import com.tyranor.next.core.game.model.ScanGame
 import com.tyranor.next.ui.common.AppAlertDialog
+import com.tyranor.next.ui.common.DialogTextButton
 import com.tyranor.next.theme.TyranorNextTheme
 import com.tyranor.next.ui.common.ProvideAppLocale
+import com.tyranor.next.ui.common.motion.ProvideMotionEnvironment
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -50,6 +52,8 @@ internal fun ArtemisPatchChoiceDialog(
     game: ScanGame,
     onChoice: (EngineLauncher.ArtemisPatchChoice?) -> Unit,
 ) {
+    // 「总是」位于确认槽，原本拿不到退场控制器、选择后弹窗瞬间消失：借取消槽捕获的控制器先退场再交付
+    val exitHandle = rememberGameDialogExitHandle()
     AppAlertDialog(
         onDismissRequest = { onChoice(null) },
         title = {
@@ -62,18 +66,26 @@ internal fun ArtemisPatchChoiceDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { onChoice(PatchChoiceOption.ALWAYS.toArtemisChoice()) }) {
-                Text(stringResource(PatchChoiceOption.ALWAYS.labelRes))
-            }
+            DialogTextButton(
+                text = stringResource(PatchChoiceOption.ALWAYS.labelRes),
+                // 三个选项按从左到右依次弹入（在按钮行整体升起之后再错开一拍）
+                modifier = Modifier.gameDialogAction(5),
+                onClick = { exitHandle.closeThen { onChoice(PatchChoiceOption.ALWAYS.toArtemisChoice()) } },
+            )
         },
         dismissButton = {
+            exitHandle.capture()
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { onChoice(PatchChoiceOption.NEVER.toArtemisChoice()) }) {
-                    Text(stringResource(PatchChoiceOption.NEVER.labelRes))
-                }
-                TextButton(onClick = { onChoice(PatchChoiceOption.ONCE.toArtemisChoice()) }) {
-                    Text(stringResource(PatchChoiceOption.ONCE.labelRes))
-                }
+                DialogTextButton(
+                    text = stringResource(PatchChoiceOption.NEVER.labelRes),
+                    modifier = Modifier.gameDialogAction(3),
+                    onClick = { onChoice(PatchChoiceOption.NEVER.toArtemisChoice()) },
+                )
+                DialogTextButton(
+                    text = stringResource(PatchChoiceOption.ONCE.labelRes),
+                    modifier = Modifier.gameDialogAction(4),
+                    onClick = { onChoice(PatchChoiceOption.ONCE.toArtemisChoice()) },
+                )
             }
         },
     )
@@ -81,7 +93,7 @@ internal fun ArtemisPatchChoiceDialog(
 
 /**
  * Compose 挂起版确认入口：供非 Compose 的透明蹦床（GameShortcutActivity）使用，
- * 行为与 Compose 版完全一致，并遵循 AppAlertDialog 弹窗规范（白底 / 8dp 圆角 / 统一排版）。
+ * 行为与 Compose 版完全一致，并遵循 AppAlertDialog 弹窗规范（白底 / 统一圆角 / 统一排版）。
  *
  * 通过 [ComponentActivity.setContent] 挂载 [ArtemisPatchChoiceDialog]，选择后卸载弹窗并返回结果；
  * 配置变更 / 进程重建时 composition 随 Activity 重建，弹窗会重新出现，由调用方负责不静默退出。
@@ -92,15 +104,17 @@ suspend fun ComponentActivity.awaitArtemisPatchChoice(game: ScanGame): EngineLau
             // 主题最外层（AGENTS.md 界面规范）：透明蹦床 trampoline 也必须挂主题，否则 typography/primary 回落默认
             TyranorNextTheme {
                 ProvideAppLocale {
-                    var showDialog by remember { mutableStateOf(true) }
-                    if (showDialog) {
-                        ArtemisPatchChoiceDialog(
-                            game = game,
-                            onChoice = { choice ->
-                                showDialog = false
-                                if (continuation.isActive) continuation.resume(choice)
-                            },
-                        )
+                    ProvideMotionEnvironment {
+                        var showDialog by remember { mutableStateOf(true) }
+                        if (showDialog) {
+                            ArtemisPatchChoiceDialog(
+                                game = game,
+                                onChoice = { choice ->
+                                    showDialog = false
+                                    if (continuation.isActive) continuation.resume(choice)
+                                },
+                            )
+                        }
                     }
                 }
             }

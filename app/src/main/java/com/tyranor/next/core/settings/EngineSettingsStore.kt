@@ -3,6 +3,8 @@ package com.tyranor.next.core.settings
 import android.content.Context
 import com.core.engine.EnginePrefs
 import com.core.engine.LaunchContract
+import com.tyranor.next.core.engine.external.WinlatorContract
+import com.tyranor.runtime.systemnnn.SystemNnnHost
 import org.json.JSONObject
 
 /**
@@ -38,6 +40,7 @@ object EngineSettingsStore {
     // Artemis 应用级默认
     const val KEY_ARTEMIS_ENGINE_VERSION = "artemis_engine_version"
     const val KEY_ARTEMIS_KERNEL = "artemis_kernel"
+    /** Legacy preference retained for stored-data compatibility; built-in launches ignore it. */
     const val KEY_ARTEMIS_ROTATE_SCREEN = "artemis_rotate_screen"
     const val KEY_ARTEMIS_AUTO_PATCH = "artemis_auto_patch"
     const val KEY_ARTEMIS_RESOLUTION = "artemis_resolution"
@@ -45,6 +48,8 @@ object EngineSettingsStore {
     const val KEY_ARTEMIS_SURFACE_CACHE_SIZE = "artemis_surface_cache_size"
     const val KEY_ARTEMIS_FONT_CACHE_SIZE = "artemis_font_cache_size"
     const val KEY_ARTEMIS_POWER_SAVING = "artemis_power_saving"
+    const val KEY_ARTEMIS_ANIME4K_ENABLED = "artemis_anime4k_enabled"
+    const val KEY_ARTEMIS_ANIME4K_MODE = "artemis_anime4k_mode"
 
     // Ren'Py 应用级默认（外置模块版本选择）
     const val KEY_RENPY_ENGINE_VERSION = "renpy_engine_version"
@@ -63,15 +68,33 @@ object EngineSettingsStore {
 
     // FVP（rfvp）应用级默认（文本编码 / 系统字体回退 / 文本高分辨率渲染 / 自定义字体）
     const val KEY_FVP_NLS = "fvp_nls"
+    const val KEY_ETHORNELL_NLS = "ethornell_nls"
+    const val KEY_ETHORNELL_FONT = "ethornell_font"
     const val KEY_FVP_SYSTEM_FONT = "fvp_system_font"
     const val KEY_FVP_TEXT_HIDPI = "fvp_text_hidpi"
     const val KEY_FVP_FONT = "fvp_font"
+
+    // CMVS（cmvs-rs）应用级字体；路径必须位于 App 私有 files/fonts/，face 为字体集合索引
+    const val KEY_CMVS_FONT = "cmvs_font"
+    private const val KEY_SYSTEMNNN_FULLSCREEN = "systemnnn_fullscreen"
+    private const val KEY_SYSTEMNNN_READING_SIZE = "systemnnn_reading_size"
+    private const val KEY_SYSTEMNNN_EXE_ANALYSIS = "systemnnn_exe_analysis"
+    private const val KEY_SYSTEMNNN_DEBUG_MODE = "systemnnn_debug_mode"
+    const val KEY_CMVS_FACE = "cmvs_font_face"
 
     // System35（xsystem35）应用级默认（独立存档 / 渲染后端 / 整数倍缩放 / 失焦静音）
     const val KEY_XSYS35_SCOPED_SAVE_DIR = "xsys35_scoped_save_dir"
     const val KEY_XSYS35_RENDERER = "xsys35_renderer"
     const val KEY_XSYS35_INTEGER_SCALE = "xsys35_integer_scale"
     const val KEY_XSYS35_MUTE_UNFOCUS = "xsys35_mute_unfocus"
+
+    // System4（xsystem4）应用级默认（独立存档 / 文本编码 / 自定义字体 / 手柄 / 跳字延迟）
+    const val KEY_XSYS4_SCOPED_SAVE_DIR = "xsys4_scoped_save_dir"
+    const val KEY_XSYS4_ENCODING = "xsys4_encoding"
+    const val KEY_XSYS4_FONT_GOTHIC_PATH = "xsys4_font_gothic_path"
+    const val KEY_XSYS4_FONT_MINCHO_PATH = "xsys4_font_mincho_path"
+    const val KEY_XSYS4_JOYPAD = "xsys4_joypad"
+    const val KEY_XSYS4_MSGSKIP_DELAY = "xsys4_msgskip_delay"
 
     // Winlator 外置启动（YU-RIS / CatSystem2 / PC 经 Winlator 跳转时的下发参数）
     const val KEY_WINLATOR_CONTAINER_ID = "winlator_container_id"
@@ -94,6 +117,24 @@ object EngineSettingsStore {
     const val KEY_RENPY_LESS_UPDATES = "renpy_less_updates"
     const val KEY_RENPY_DONT_USE_GL2 = "renpy_dont_use_gl2"
     const val KEY_RENPY_RECOMPILE = "renpy_recompile"
+
+    // Ruffle 外置模块的 App prefs 键（独立于插件 wire 键：插件 settings 节的键名是 backend/quality/
+    // scaleMode/letterbox/loadBehavior 与 app.screenTimeout，由 RuffleExternalEngineModule 组装）
+    const val KEY_RUFFLE_SCREEN_TIMEOUT = "ruffle_screen_timeout"
+    const val KEY_RUFFLE_BACKEND = "ruffle_backend"
+    const val KEY_RUFFLE_QUALITY = "ruffle_quality"
+    const val KEY_RUFFLE_SCALE_MODE = "ruffle_scale_mode"
+    const val KEY_RUFFLE_LETTERBOX = "ruffle_letterbox"
+    const val KEY_RUFFLE_LOAD_BEHAVIOR = "ruffle_load_behavior"
+    // MAGES.（impacto）外置宿主的 App prefs 键；与 PerGameSettingsStore.F_IMPACTO_*、
+    // GameOverridePartitions.KEY_IMPACTO_* 字面量锚定（由 ImpactoSettingsKeysTest 约束）
+    const val KEY_IMPACTO_SWAP_CONFIRM_CANCEL = "impacto_swap_confirm_cancel"
+    const val KEY_IMPACTO_VSYNC = "impacto_vsync"
+    const val KEY_IMPACTO_VIDEO_PLAYBACK = "impacto_video_playback"
+    const val KEY_IMPACTO_SUBTITLES = "impacto_subtitles"
+    const val KEY_IMPACTO_CLOSE_BACKLOG_AT_END = "impacto_close_backlog_at_end"
+    const val KEY_IMPACTO_DELUSION_MOUSE = "impacto_delusion_mouse"
+    const val KEY_IMPACTO_LOG_LEVEL = "impacto_log_level"
 
     // Tyrano 与 RPG Maker Web 共用同一套 WebView 宿主设置；启动链路按同一键读取。
     const val KEY_TYRANO_EXTERNAL_NETWORK = "tyrano_external_network"
@@ -132,14 +173,15 @@ object EngineSettingsStore {
     const val KR_AUTO = "auto"
     const val KR_139 = "1.3.9"
     const val KR_134 = "1.3.4"
-    const val KR_126 = "1.2.6"
     const val KERNEL_KIRIKIRI2 = "kirikiri2"
     const val KERNEL_KRKRSDL3 = "krkrsdl3"
+    val KR_VERSIONS = setOf(KR_AUTO, KR_139, KR_134)
+    val KR_KERNELS = setOf(KR_AUTO, KERNEL_KIRIKIRI2, KERNEL_KRKRSDL3)
     const val KR_PATCH_OVERLAY_AUTO = "auto"
     const val KR_PATCH_OVERLAY_FORCE = "force"
     const val KR_PATCH_OVERLAY_OFF = "off"
 
-    // Anime4K 画面超分模式（仅 kirikiri2 内核路径生效；取值与引擎侧 Anime4kRuntime 一致）
+    // 历史单模式设置的迁移取值；当前滤镜链的执行能力由原始帧接入门禁决定。
     const val ANIME4K_OFF = "off"
     const val ANIME4K_S = "s"
     const val ANIME4K_M = "m"
@@ -154,11 +196,25 @@ object EngineSettingsStore {
         ANIME4K_SOFT_S, ANIME4K_SOFT_M, ANIME4K_SOFT_L, ANIME4K_DEBLUR,
     )
 
+    /** Artemis 的启用开关独立于模式，模式不接受 off。 */
+    const val ART_ANIME4K_DEFAULT = ANIME4K_S
+    val ART_ANIME4K_MODES = ANIME4K_MODES - ANIME4K_OFF
+
     const val RENDERER_SOFTWARE = "software"
     const val RENDERER_OPENGL = "opengl"
 
-    // 写入引擎 XML（Kirikiroid2Preference.xml/GlobalPreference.xml）的 Item 键名，
-    // 与 libgame.so 内 IndividualConfigManager 读取的键一致，键名不可改。
+    // 写入引擎 XML（GlobalPreference.xml/Kirikiroid2Preference.xml）的 Item 键名。
+    // 内核（libgame.so）按 Kirikiroid2 源码 PreferenceConfig.h 中各 tTVPPreferenceInfo*
+    // 构造参数的第二项（存储键）读取，并非 locale ID（preference_* 仅为界面文案 id）；
+    // 键名不可改。App 侧 prefs 键（kr_*）只是宿主自己的存储键，内核不认识。
+    const val ENGINE_RENDERER = "renderer"
+    const val ENGINE_SOFTWARE_DRAW_THREAD = "software_draw_thread"
+    const val ENGINE_SOFTWARE_COMPRESS_TEX = "software_compress_tex"
+    const val ENGINE_OGL_COMPRESS_TEX = "ogl_compress_tex"
+    const val ENGINE_MEM_USAGE = "memusage"
+    const val ENGINE_OGL_MAX_TEXSIZE = "ogl_max_texsize"
+    const val ENGINE_OGL_ACCURATE_RENDER = "ogl_accurate_render"
+    const val ENGINE_FPS_LIMIT = "fps_limit"
     const val ENGINE_VCURSOR_SCALE = "vcursor_scale"
     const val ENGINE_MENU_HANDLER_OPA = "menu_handler_opa"
     // 虚拟鼠标缩放比（0.01..1.50，引擎默认 1.00；0.50 与原版 Ty 一致，两位小数）
@@ -176,9 +232,6 @@ object EngineSettingsStore {
     const val ART_ENGINE_AUTO = "auto"
     const val ART_ENGINE_V1 = "1"
     const val ART_ENGINE_V2 = "2"
-    const val ART_ENGINE_V3 = "3"
-    const val ART_ENGINE_V4 = "4"
-    const val ART_ENGINE_V5 = "5"
     const val ART_ENGINE_V6 = "6"
     /** Artemis 内核：官方多 revision 运行库 / 自研 clean-room 兼容内核。 */
     const val ART_KERNEL_OFFICIAL = "official"
@@ -190,7 +243,7 @@ object EngineSettingsStore {
     /** 补丁策略默认值：关闭（不询问、不自动补丁；用户可在引擎设置/单游戏覆盖中改为询问或自动）。 */
     const val ART_PATCH_DEFAULT = AUTO_PATCH_OFF
     /** Artemis 引擎版本全量白名单，供单游戏覆盖值校验（非法持久化值回退全局）。 */
-    val ART_VERSIONS = setOf(ART_ENGINE_AUTO, ART_ENGINE_V1, ART_ENGINE_V2, ART_ENGINE_V3, ART_ENGINE_V4, ART_ENGINE_V5, ART_ENGINE_V6)
+    val ART_VERSIONS = setOf(ART_ENGINE_AUTO, ART_ENGINE_V1, ART_ENGINE_V2, ART_ENGINE_V6)
     /** Artemis 补丁策略全量白名单，供单游戏覆盖值校验（非法持久化值回退全局）。 */
     val ART_PATCHES = setOf(AUTO_PATCH_ASK, AUTO_PATCH_AUTO, AUTO_PATCH_OFF)
     const val ART_RESOLUTION_DEFAULT = ""
@@ -239,7 +292,37 @@ object EngineSettingsStore {
     // Ren'Py 版本取值常量
     const val RENPY_AUTO = "auto"
     const val RENPY_85 = "8.5"
+    const val RENPY_850 = "8.5.0"
+    const val RENPY_853 = "8.5.3"
     const val RENPY_77 = "7.7.1"
+
+    /** 历史 8.5 选择值对应原 8.5.0 模块，不自动升级到 8.5.3。 */
+    fun normalizeRenpyVersion(value: String?): String? =
+        if (value?.trim() == RENPY_85) RENPY_850 else value
+
+    // Ruffle 外置模块取值域（对齐插件 RuffleConfiguration 的默认值）
+    const val RUFFLE_SCREEN_TIMEOUT_DEFAULT = 0
+    const val RUFFLE_BACKEND_OPENGL = "opengl"
+    const val RUFFLE_QUALITY_HIGH = "high"
+    const val RUFFLE_SCALE_MODE_SHOW_ALL = "showall"
+    const val RUFFLE_LETTERBOX_ON = "on"
+    const val RUFFLE_LOAD_BEHAVIOR_STREAMING = "streaming"
+    val RUFFLE_SCREEN_TIMEOUTS: Set<Int> = linkedSetOf(0, 5, 10, 15, 30, 45, 60)
+    val RUFFLE_BACKENDS: Set<String> = linkedSetOf("auto", RUFFLE_BACKEND_OPENGL, "vulkan")
+    val RUFFLE_QUALITIES: Set<String> = linkedSetOf("low", "medium", RUFFLE_QUALITY_HIGH, "best")
+    val RUFFLE_SCALE_MODES: Set<String> = linkedSetOf("exactfit", "noborder", "noscale", RUFFLE_SCALE_MODE_SHOW_ALL)
+    val RUFFLE_LETTERBOXES: Set<String> = linkedSetOf(RUFFLE_LETTERBOX_ON, "off")
+    val RUFFLE_LOAD_BEHAVIORS: Set<String> = linkedSetOf(RUFFLE_LOAD_BEHAVIOR_STREAMING, "delayed", "blocking")
+
+    // MAGES.（impacto）日志等级取值域，对齐上游 LogLevel（off 为关闭；默认 warning）
+    const val IMPACTO_LOG_LEVEL_WARNING = "warning"
+    val IMPACTO_LOG_LEVELS: Set<String> =
+        linkedSetOf("off", "fatal", "error", IMPACTO_LOG_LEVEL_WARNING, "info", "debug", "trace")
+
+    // MAGES.（impacto）影片字幕轨：引擎配置里的 SubtitleConfig 是标志枚举，写成 "Karaoke|Translation" 这样的组合；
+    // “两个都关”没有引擎读得回的写法，所以只提供三档：全部 / 仅翻译 / 仅卡拉 OK。
+    const val IMPACTO_SUBTITLES_ALL = "all"
+    val IMPACTO_SUBTITLES: Set<String> = linkedSetOf(IMPACTO_SUBTITLES_ALL, "translation", "karaoke")
 
     // Siglus 语言取值常量（auto 不设置 SIGLUS_LANGUAGE，保持引擎默认 JP）
     const val SIGLUS_LANGUAGE_AUTO = "auto"
@@ -286,6 +369,9 @@ object EngineSettingsStore {
 
     // FVP 文本编码取值（创建引擎时固定，改动后需重启本局）
     const val FVP_NLS_SJIS = "sjis"
+    const val ETHORNELL_NLS_SJIS = "sjis"
+    const val ETHORNELL_NLS_GBK = "gbk"
+    val ETHORNELL_NLS_VALUES: Set<String> = linkedSetOf(ETHORNELL_NLS_SJIS, ETHORNELL_NLS_GBK)
     const val FVP_NLS_GBK = "gbk"
     const val FVP_NLS_UTF8 = "utf8"
     val FVP_NLS_VALUES: Set<String> = linkedSetOf(
@@ -304,6 +390,21 @@ object EngineSettingsStore {
         XSYS35_RENDERER_SOFTWARE,
     )
 
+    // System4 文本编码（sjis = 日文版默认，gbk = 中文版）
+    const val XSYS4_ENCODING_SJIS = "sjis"
+    const val XSYS4_ENCODING_GBK = "gbk"
+    val XSYS4_ENCODING_VALUES: Set<String> = linkedSetOf(XSYS4_ENCODING_SJIS, XSYS4_ENCODING_GBK)
+
+    // System4 手柄取值（auto 不传 --joypad，交由引擎默认）
+    const val XSYS4_JOYPAD_AUTO = "auto"
+    const val XSYS4_JOYPAD_ON = "on"
+    const val XSYS4_JOYPAD_OFF = "off"
+    val XSYS4_JOYPAD_VALUES: Set<String> = linkedSetOf(XSYS4_JOYPAD_AUTO, XSYS4_JOYPAD_ON, XSYS4_JOYPAD_OFF)
+
+    // System4 跳字延迟预设（毫秒；0 = 引擎默认，不传 --msgskip-delay）
+    const val XSYS4_MSGSKIP_DELAY_DEFAULT = 0
+    val XSYS4_MSGSKIP_DELAY_VALUES: Set<Int> = linkedSetOf(0, 100, 200, 400)
+
     // Winlator 外置启动取值域（空串 = 不下发该参数，跟随容器/快捷方式配置）
     /**
      * 图形驱动固定组合：Vulkan 驱动（Turnip/Vortek）× OpenGL 驱动（Zink/VirGL/Gladio），
@@ -318,7 +419,11 @@ object EngineSettingsStore {
         "vortek,gladio",
     )
 
-    val WINLATOR_DXWRAPPERS: Set<String> = linkedSetOf("", "dxvk", "wined3d")
+    val WINLATOR_DXWRAPPERS: Set<String> = linkedSetOf(
+        "", "dxvk", "wined3d",
+        WinlatorContract.DXWRAPPER_WINED3D_GL,
+        WinlatorContract.DXWRAPPER_WINED3D_GDI,
+    )
 
     val WINLATOR_BOX64_PRESETS: Set<String> = linkedSetOf(
         "",
@@ -441,13 +546,6 @@ object EngineSettingsStore {
     fun setKrPatchOverlayMode(c: Context, v: String) =
         prefs(c).edit().putString(KEY_KR_PATCH_OVERLAY_MODE, normalizeKrPatchOverlayMode(v)).apply()
 
-    fun getKrAnime4kMode(c: Context): String {
-        val v = prefs(c).getString(KEY_KR_ANIME4K_MODE, null)
-        return if (v != null && v in ANIME4K_MODES) v else ANIME4K_OFF
-    }
-    fun setKrAnime4kMode(c: Context, v: String) =
-        prefs(c).edit().putString(KEY_KR_ANIME4K_MODE, if (v in ANIME4K_MODES) v else ANIME4K_OFF).apply()
-
     /** Automatically confirm one-button KRKR information dialogs during the first 30 seconds. */
     fun isKrSkipStartupDialogs(c: Context): Boolean =
         prefs(c).getBoolean(KEY_KR_SKIP_STARTUP_DIALOGS, false)
@@ -533,6 +631,9 @@ object EngineSettingsStore {
                     if (it.isEmpty()) it else normalizeVcursorScale(it)
                 }
                 KEY_KR_MENU_HANDLER_OPA -> override?.let { if (it.isEmpty() || it in KR_MENU_HANDLER_OPAS) it else null }
+                // 布尔开关没有「引擎默认」语义：存量 "" 是旧版「跟随全局」的写法，按 null
+                // （跟随全局）处理，避免游戏级空值删项压过全局 XML 的当前值（PR #155 审查）
+                KEY_KR_OGL_ACCURATE_RENDER -> override?.takeIf { it.isNotEmpty() }
                 else -> override
             }
             val globalRaw = prefs(c).getString(key, null).orEmpty().trim()
@@ -563,7 +664,6 @@ object EngineSettingsStore {
     private fun normalizeKr(v: String?): String = when (v?.trim()?.lowercase()) {
         KR_139 -> KR_139
         KR_134 -> KR_134
-        KR_126 -> KR_126
         else -> KR_AUTO
     }
 
@@ -627,9 +727,6 @@ object EngineSettingsStore {
         return if (
             v == ART_ENGINE_V1 ||
             v == ART_ENGINE_V2 ||
-            v == ART_ENGINE_V3 ||
-            v == ART_ENGINE_V4 ||
-            v == ART_ENGINE_V5 ||
             v == ART_ENGINE_V6
         ) v else ART_ENGINE_AUTO
     }
@@ -638,8 +735,6 @@ object EngineSettingsStore {
     fun setArtKernel(c: Context, v: String) = prefs(c).edit().putString(KEY_ARTEMIS_KERNEL, normalizeArtKernel(v)).apply()
     fun normalizeArtKernel(v: String?): String =
         if (v?.trim() == ART_KERNEL_CLEAN) ART_KERNEL_CLEAN else ART_KERNEL_OFFICIAL
-    fun isArtRotateScreen(c: Context): Boolean = prefs(c).getBoolean(KEY_ARTEMIS_ROTATE_SCREEN, false)
-    fun setArtRotateScreen(c: Context, b: Boolean) = prefs(c).edit().putBoolean(KEY_ARTEMIS_ROTATE_SCREEN, b).apply()
     fun getArtAutoPatch(c: Context): String {
         val v = prefs(c).getString(KEY_ARTEMIS_AUTO_PATCH, ART_PATCH_DEFAULT)?.trim()
         return if (v != null && v in ART_PATCHES) v else ART_PATCH_DEFAULT
@@ -656,6 +751,10 @@ object EngineSettingsStore {
     fun getArtPowerSaving(c: Context): String = artStringPref(c, KEY_ARTEMIS_POWER_SAVING, ART_TOGGLES)
     fun setArtPowerSaving(c: Context, v: String) = setArtStringPref(c, KEY_ARTEMIS_POWER_SAVING, v, ART_TOGGLES)
 
+
+    fun normalizeArtAnime4kMode(mode: String?): String =
+        mode?.trim()?.takeIf { it in ART_ANIME4K_MODES } ?: ART_ANIME4K_DEFAULT
+
     private fun artStringPref(c: Context, key: String, allowed: Set<String>): String {
         val value = prefs(c).getString(key, ART_CACHE_DEFAULT).orEmpty().trim()
         return if (value in allowed) value else ART_CACHE_DEFAULT
@@ -669,12 +768,21 @@ object EngineSettingsStore {
     // ---------- Ren'Py ----------
     fun getRenpyVersion(c: Context): String {
         val v = prefs(c).getString(KEY_RENPY_ENGINE_VERSION, RENPY_AUTO)
-        return when (v) {
-            RENPY_85, RENPY_77 -> v
+        return when (normalizeRenpyVersion(v)?.trim()) {
+            RENPY_850 -> RENPY_850
+            RENPY_853 -> RENPY_853
+            RENPY_77 -> RENPY_77
             else -> RENPY_AUTO
         }
     }
     fun setRenpyVersion(c: Context, v: String) = prefs(c).edit().putString(KEY_RENPY_ENGINE_VERSION, v).apply()
+
+    /** Capture new marker and legacy fields atomically from one SharedPreferences snapshot. */
+    fun getGraphicsSettings(c: Context, family: GraphicsFamily): GraphicsSettings =
+        GraphicsSettingsCodec.readGlobal(prefs(c).all, family)
+
+    fun setGraphicsSettings(c: Context, family: GraphicsFamily, settings: GraphicsSettings) =
+        prefs(c).edit().putString(family.preferenceKey, GraphicsSettingsCodec.encode(settings)).apply()
 
     // ---------- Siglus ----------
     fun getSiglusLanguage(c: Context): String =
@@ -712,6 +820,16 @@ object EngineSettingsStore {
     fun normalizeFbNls(v: String?): String =
         v?.trim()?.lowercase()?.takeIf { it in FB_NLS_VALUES } ?: FB_NLS_AUTO
 
+    // ---------- Ethornell / BGI ----------
+    fun getEthornellNls(c: Context): String =
+        normalizeEthornellNls(prefs(c).getString(KEY_ETHORNELL_NLS, ETHORNELL_NLS_SJIS))
+    fun setEthornellNls(c: Context, value: String) =
+        prefs(c).edit().putString(KEY_ETHORNELL_NLS, normalizeEthornellNls(value)).apply()
+    fun normalizeEthornellNls(value: String?): String =
+        value?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf { it in ETHORNELL_NLS_VALUES } ?: ETHORNELL_NLS_SJIS
+    fun getEthornellFont(c: Context): String = prefs(c).getString(KEY_ETHORNELL_FONT, "").orEmpty()
+    fun setEthornellFont(c: Context, value: String) = prefs(c).edit().putString(KEY_ETHORNELL_FONT, value.trim()).apply()
+
     // ---------- FVP ----------
     fun getFvpNls(c: Context): String =
         normalizeFvpNls(prefs(c).getString(KEY_FVP_NLS, FVP_NLS_SJIS))
@@ -727,6 +845,38 @@ object EngineSettingsStore {
     fun setFvpFont(c: Context, v: String?) =
         prefs(c).edit().putString(KEY_FVP_FONT, normalizeFvpFont(v)).apply()
     fun normalizeFvpFont(v: String?): String = v?.trim().orEmpty()
+
+    // ---------- SystemNNN ----------
+    val SYSTEMNNN_READING_SIZES: List<Int> = SystemNnnHost.READING_SIZES
+
+    fun isSystemNnnFullscreen(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_SYSTEMNNN_FULLSCREEN, SystemNnnHost.DEFAULT_FULLSCREEN)
+
+    fun getSystemNnnReadingSize(c: Context): Int =
+        prefs(c).getInt(KEY_SYSTEMNNN_READING_SIZE, 0).takeIf { it in SYSTEMNNN_READING_SIZES }
+            ?: SystemNnnHost.legacyReadingSize(c)
+
+    fun isSystemNnnExeAnalysisEnabled(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_SYSTEMNNN_EXE_ANALYSIS, SystemNnnHost.DEFAULT_EXE_ANALYSIS)
+
+    fun isSystemNnnDebugMode(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_SYSTEMNNN_DEBUG_MODE, SystemNnnHost.DEFAULT_DEBUG_MODE)
+
+    fun saveSystemNnnSettings(c: Context, fullscreen: Boolean, readingSize: Int, exeAnalysis: Boolean, debugMode: Boolean) {
+        require(readingSize in SYSTEMNNN_READING_SIZES)
+        prefs(c).edit()
+            .putBoolean(KEY_SYSTEMNNN_FULLSCREEN, fullscreen)
+            .putInt(KEY_SYSTEMNNN_READING_SIZE, readingSize)
+            .putBoolean(KEY_SYSTEMNNN_EXE_ANALYSIS, exeAnalysis)
+            .putBoolean(KEY_SYSTEMNNN_DEBUG_MODE, debugMode)
+            .apply()
+    }
+
+    // ---------- CMVS ----------
+    fun getCmvsFont(c: Context): String = prefs(c).getString(KEY_CMVS_FONT, "").orEmpty()
+    fun setCmvsFont(c: Context, v: String?) =
+        prefs(c).edit().putString(KEY_CMVS_FONT, v?.trim().orEmpty()).apply()
+    fun getCmvsFontFace(c: Context): Int = prefs(c).getInt(KEY_CMVS_FACE, 0).coerceIn(0, 1024)
 
     // ---------- System35（xsystem35） ----------
     fun isXs35ScopedSaveDir(c: Context): Boolean =
@@ -745,6 +895,39 @@ object EngineSettingsStore {
     fun isXs35MuteUnfocus(c: Context): Boolean = prefs(c).getBoolean(KEY_XSYS35_MUTE_UNFOCUS, false)
     fun setXs35MuteUnfocus(c: Context, b: Boolean) =
         prefs(c).edit().putBoolean(KEY_XSYS35_MUTE_UNFOCUS, b).apply()
+
+    // ---------- System4（xsystem4） ----------
+    fun isXs4ScopedSaveDir(c: Context): Boolean =
+        prefs(c).getBoolean(KEY_XSYS4_SCOPED_SAVE_DIR, true)
+    fun setXs4ScopedSaveDir(c: Context, b: Boolean) =
+        prefs(c).edit().putBoolean(KEY_XSYS4_SCOPED_SAVE_DIR, b).apply()
+    fun getXs4Encoding(c: Context): String =
+        normalizeXs4Encoding(prefs(c).getString(KEY_XSYS4_ENCODING, XSYS4_ENCODING_SJIS))
+    fun setXs4Encoding(c: Context, v: String) =
+        prefs(c).edit().putString(KEY_XSYS4_ENCODING, normalizeXs4Encoding(v)).apply()
+    fun normalizeXs4Encoding(v: String?): String =
+        v?.trim()?.lowercase()?.takeIf { it in XSYS4_ENCODING_VALUES } ?: XSYS4_ENCODING_SJIS
+    fun getXs4FontGothicPath(c: Context): String =
+        normalizeXs4FontPath(prefs(c).getString(KEY_XSYS4_FONT_GOTHIC_PATH, ""))
+    fun setXs4FontGothicPath(c: Context, v: String?) =
+        prefs(c).edit().putString(KEY_XSYS4_FONT_GOTHIC_PATH, normalizeXs4FontPath(v)).apply()
+    fun getXs4FontMinchoPath(c: Context): String =
+        normalizeXs4FontPath(prefs(c).getString(KEY_XSYS4_FONT_MINCHO_PATH, ""))
+    fun setXs4FontMinchoPath(c: Context, v: String?) =
+        prefs(c).edit().putString(KEY_XSYS4_FONT_MINCHO_PATH, normalizeXs4FontPath(v)).apply()
+    fun normalizeXs4FontPath(v: String?): String = v?.trim().orEmpty()
+    fun getXs4Joypad(c: Context): String =
+        normalizeXs4Joypad(prefs(c).getString(KEY_XSYS4_JOYPAD, XSYS4_JOYPAD_AUTO))
+    fun setXs4Joypad(c: Context, v: String) =
+        prefs(c).edit().putString(KEY_XSYS4_JOYPAD, normalizeXs4Joypad(v)).apply()
+    fun normalizeXs4Joypad(v: String?): String =
+        v?.trim()?.lowercase()?.takeIf { it in XSYS4_JOYPAD_VALUES } ?: XSYS4_JOYPAD_AUTO
+    fun getXs4MsgskipDelay(c: Context): Int =
+        normalizeXs4MsgskipDelay(prefs(c).getString(KEY_XSYS4_MSGSKIP_DELAY, null)?.trim()?.toIntOrNull())
+    fun setXs4MsgskipDelay(c: Context, v: Int) =
+        prefs(c).edit().putString(KEY_XSYS4_MSGSKIP_DELAY, normalizeXs4MsgskipDelay(v).toString()).apply()
+    fun normalizeXs4MsgskipDelay(v: Int?): Int =
+        v?.takeIf { it in XSYS4_MSGSKIP_DELAY_VALUES } ?: XSYS4_MSGSKIP_DELAY_DEFAULT
 
     // ---------- Winlator 外置启动 ----------
 
@@ -817,6 +1000,7 @@ object EngineSettingsStore {
         return t.takeIf { it in WINLATOR_GRAPHICS_DRIVERS } ?: ""
     }
 
+    /** 接受既有 wrapper 和 App 内部 GL/GDI 预设；未知值回退为空串，不下发覆盖。 */
     fun normalizeWinlatorDxWrapper(v: String?): String =
         v?.trim()?.lowercase()?.takeIf { it in WINLATOR_DXWRAPPERS } ?: ""
 
@@ -1075,4 +1259,144 @@ object EngineSettingsStore {
         RENPY_BOOL_KEYS.forEach(editor::remove)
         editor.apply()
     }
+
+    // ---------- Ruffle 外置模块 ----------
+
+    /**
+     * Ruffle 外置模块的配置节。默认值对齐插件 `RuffleConfiguration`：
+     * backend=opengl / quality=high / scaleMode=showall / letterbox=on /
+     * loadBehavior=streaming / screenTimeout=0（禁用）。
+     */
+    data class Ruffle(
+        var screenTimeout: Int = RUFFLE_SCREEN_TIMEOUT_DEFAULT,
+        var backend: String = RUFFLE_BACKEND_OPENGL,
+        var quality: String = RUFFLE_QUALITY_HIGH,
+        var scaleMode: String = RUFFLE_SCALE_MODE_SHOW_ALL,
+        var letterbox: String = RUFFLE_LETTERBOX_ON,
+        var loadBehavior: String = RUFFLE_LOAD_BEHAVIOR_STREAMING,
+    )
+
+    private val RUFFLE_STRING_KEYS = listOf(
+        KEY_RUFFLE_BACKEND, KEY_RUFFLE_QUALITY, KEY_RUFFLE_SCALE_MODE,
+        KEY_RUFFLE_LETTERBOX, KEY_RUFFLE_LOAD_BEHAVIOR,
+    )
+
+    fun loadRuffle(c: Context): Ruffle {
+        val p = prefs(c)
+        val d = Ruffle()
+        return Ruffle(
+            screenTimeout = normalizeRuffleScreenTimeout(p.getInt(KEY_RUFFLE_SCREEN_TIMEOUT, d.screenTimeout)),
+            backend = normalizeRuffleAllowed(p.getString(KEY_RUFFLE_BACKEND, null), RUFFLE_BACKENDS, d.backend),
+            quality = normalizeRuffleAllowed(p.getString(KEY_RUFFLE_QUALITY, null), RUFFLE_QUALITIES, d.quality),
+            scaleMode = normalizeRuffleAllowed(p.getString(KEY_RUFFLE_SCALE_MODE, null), RUFFLE_SCALE_MODES, d.scaleMode),
+            letterbox = normalizeRuffleAllowed(p.getString(KEY_RUFFLE_LETTERBOX, null), RUFFLE_LETTERBOXES, d.letterbox),
+            loadBehavior = normalizeRuffleAllowed(p.getString(KEY_RUFFLE_LOAD_BEHAVIOR, null), RUFFLE_LOAD_BEHAVIORS, d.loadBehavior),
+        )
+    }
+
+    fun saveRuffle(c: Context, r: Ruffle) {
+        prefs(c).edit().apply {
+            putInt(KEY_RUFFLE_SCREEN_TIMEOUT, normalizeRuffleScreenTimeout(r.screenTimeout))
+            putString(KEY_RUFFLE_BACKEND, normalizeRuffleBackend(r.backend))
+            putString(KEY_RUFFLE_QUALITY, normalizeRuffleQuality(r.quality))
+            putString(KEY_RUFFLE_SCALE_MODE, normalizeRuffleScaleMode(r.scaleMode))
+            putString(KEY_RUFFLE_LETTERBOX, normalizeRuffleLetterbox(r.letterbox))
+            putString(KEY_RUFFLE_LOAD_BEHAVIOR, normalizeRuffleLoadBehavior(r.loadBehavior))
+        }.apply()
+    }
+
+    /** 仅重置 ruffle 节，其余引擎设置不动。 */
+    fun resetRuffle(c: Context) {
+        val editor = prefs(c).edit()
+        editor.remove(KEY_RUFFLE_SCREEN_TIMEOUT)
+        RUFFLE_STRING_KEYS.forEach(editor::remove)
+        editor.apply()
+    }
+
+    fun normalizeRuffleScreenTimeout(v: Int?): Int =
+        v?.takeIf { it in RUFFLE_SCREEN_TIMEOUTS } ?: RUFFLE_SCREEN_TIMEOUT_DEFAULT
+
+    fun normalizeRuffleBackend(v: String?): String =
+        normalizeRuffleAllowed(v, RUFFLE_BACKENDS, RUFFLE_BACKEND_OPENGL)
+
+    fun normalizeRuffleQuality(v: String?): String =
+        normalizeRuffleAllowed(v, RUFFLE_QUALITIES, RUFFLE_QUALITY_HIGH)
+
+    fun normalizeRuffleScaleMode(v: String?): String =
+        normalizeRuffleAllowed(v, RUFFLE_SCALE_MODES, RUFFLE_SCALE_MODE_SHOW_ALL)
+
+    fun normalizeRuffleLetterbox(v: String?): String =
+        normalizeRuffleAllowed(v, RUFFLE_LETTERBOXES, RUFFLE_LETTERBOX_ON)
+
+    fun normalizeRuffleLoadBehavior(v: String?): String =
+        normalizeRuffleAllowed(v, RUFFLE_LOAD_BEHAVIORS, RUFFLE_LOAD_BEHAVIOR_STREAMING)
+
+    private fun normalizeRuffleAllowed(v: String?, allowed: Set<String>, fallback: String): String =
+        v?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf { it in allowed } ?: fallback
+
+    // ---------- MAGES.（impacto）外置宿主 ----------
+
+    /**
+     * MAGES.（impacto）宿主的配置节。字段对应上游 `userconfig.toml` 里 Android 上有意义的项（默认值与上游一致）：
+     * swapConfirmCancel → CommonSettings.SwapConfirmCancelButtons；vsync → GameSettings.<profile>.UseVSync；
+     * videoPlayback → AdvancedSettings.VideoPlayer（FFmpeg / None）；subtitles →
+     * EnhancementsSettings.SubtitleConfig（影片字幕轨，三档 all / translation / karaoke）；closeBacklogAtEnd → EnhancementsSettings.CloseBacklogWhenReachedEnd；
+     * delusionMouse → EnhancementsSettings.CHLCC / CCLCC.DelusionMousePatch；logLevel → CommonSettings.LogLvl。
+     * 分辨率、显示模式、渲染器与音频后端在 Android 上由系统和宿主固定，不在此列。
+     */
+    data class Impacto(
+        var swapConfirmCancel: Boolean = false,
+        var vsync: Boolean = true,
+        var videoPlayback: Boolean = true,
+        var subtitles: String = IMPACTO_SUBTITLES_ALL,
+        var closeBacklogAtEnd: Boolean = true,
+        var delusionMouse: Boolean = true,
+        var logLevel: String = IMPACTO_LOG_LEVEL_WARNING,
+    )
+
+    private val IMPACTO_BOOL_KEYS = listOf(
+        KEY_IMPACTO_SWAP_CONFIRM_CANCEL, KEY_IMPACTO_VSYNC, KEY_IMPACTO_VIDEO_PLAYBACK,
+        KEY_IMPACTO_CLOSE_BACKLOG_AT_END, KEY_IMPACTO_DELUSION_MOUSE,
+    )
+
+    fun loadImpacto(c: Context): Impacto {
+        val p = prefs(c)
+        val d = Impacto()
+        return Impacto(
+            swapConfirmCancel = p.getBoolean(KEY_IMPACTO_SWAP_CONFIRM_CANCEL, d.swapConfirmCancel),
+            vsync = p.getBoolean(KEY_IMPACTO_VSYNC, d.vsync),
+            videoPlayback = p.getBoolean(KEY_IMPACTO_VIDEO_PLAYBACK, d.videoPlayback),
+            subtitles = normalizeImpactoSubtitles(p.getString(KEY_IMPACTO_SUBTITLES, null)),
+            closeBacklogAtEnd = p.getBoolean(KEY_IMPACTO_CLOSE_BACKLOG_AT_END, d.closeBacklogAtEnd),
+            delusionMouse = p.getBoolean(KEY_IMPACTO_DELUSION_MOUSE, d.delusionMouse),
+            logLevel = normalizeImpactoLogLevel(p.getString(KEY_IMPACTO_LOG_LEVEL, null)),
+        )
+    }
+
+    fun saveImpacto(c: Context, s: Impacto) {
+        prefs(c).edit().apply {
+            putBoolean(KEY_IMPACTO_SWAP_CONFIRM_CANCEL, s.swapConfirmCancel)
+            putBoolean(KEY_IMPACTO_VSYNC, s.vsync)
+            putBoolean(KEY_IMPACTO_VIDEO_PLAYBACK, s.videoPlayback)
+            putString(KEY_IMPACTO_SUBTITLES, normalizeImpactoSubtitles(s.subtitles))
+            putBoolean(KEY_IMPACTO_CLOSE_BACKLOG_AT_END, s.closeBacklogAtEnd)
+            putBoolean(KEY_IMPACTO_DELUSION_MOUSE, s.delusionMouse)
+            putString(KEY_IMPACTO_LOG_LEVEL, normalizeImpactoLogLevel(s.logLevel))
+        }.apply()
+    }
+
+    /** 仅重置 impacto 节，其余引擎设置不动。 */
+    fun resetImpacto(c: Context) {
+        val editor = prefs(c).edit()
+        IMPACTO_BOOL_KEYS.forEach(editor::remove)
+        editor.remove(KEY_IMPACTO_LOG_LEVEL)
+        editor.remove(KEY_IMPACTO_SUBTITLES)
+        editor.apply()
+    }
+
+    fun normalizeImpactoLogLevel(v: String?): String =
+        v?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf { it in IMPACTO_LOG_LEVELS } ?: IMPACTO_LOG_LEVEL_WARNING
+
+    fun normalizeImpactoSubtitles(v: String?): String =
+        v?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf { it in IMPACTO_SUBTITLES } ?: IMPACTO_SUBTITLES_ALL
 }

@@ -4,7 +4,9 @@ import android.content.Context
 import com.core.engine.EnginePrefs
 import com.tyranor.next.core.game.storage.GameOverridePartitions
 import com.tyranor.next.core.game.storage.GameOverridesRepository
+import com.tyranor.next.core.engine.runtime.RuntimeModuleSettingsSpec
 import org.json.JSONObject
+import java.util.Locale
 
 /**
  * 单游戏（应用级）引擎设置覆盖层。参考 Rinne 的 Per-game 实现：
@@ -18,9 +20,21 @@ import org.json.JSONObject
  */
 object PerGameSettingsStore {
 
+    sealed interface RuntimeModuleSettingsSaveResult {
+        data object Saved : RuntimeModuleSettingsSaveResult
+        data object GameMissing : RuntimeModuleSettingsSaveResult
+        data object BindingChanged : RuntimeModuleSettingsSaveResult
+        data object ModuleDisabled : RuntimeModuleSettingsSaveResult
+        data object DescriptorChanged : RuntimeModuleSettingsSaveResult
+        data object InvalidValues : RuntimeModuleSettingsSaveResult
+        data class StorageFailure(val detail: String?) : RuntimeModuleSettingsSaveResult
+    }
+
     private val PREF_NAME = EnginePrefs.GAME_OVERRIDES_PREFS
 
     // KR 覆盖字段名
+    /** Read-only migration anchor; the removed single-mode UI has no setter. */
+    const val F_ANIME4K_MODE = GameOverridePartitions.KEY_KR_LEGACY_ANIME4K_MODE
     const val F_ENGINE_VERSION = "engine_version"
     const val F_ENGINE_KERNEL = "engine_kernel"
     const val F_SCOPED_SAVE_DIR = "scoped_save_dir"
@@ -38,13 +52,13 @@ object PerGameSettingsStore {
     const val F_FPS_LIMIT = "fps_limit"
     const val F_VCURSOR_SCALE = "vcursor_scale"
     const val F_MENU_HANDLER_OPA = "menu_handler_opa"
-    const val F_ANIME4K_MODE = "anime4k_mode"
     /** KR 渲染偏好覆盖字段清单（由 [KrRenderPrefs] 派生，与全局键一一对应）。 */
     val KR_FIELDS: List<String> = KrRenderPrefs.ALL.map { it.overrideField }
 
     // Artemis
     const val F_ART_VERSION = "art_engine_version"
     const val F_ART_KERNEL = "artemis_kernel"
+    /** Legacy per-game override retained in the stored settings shape; no longer affects launches. */
     const val F_ART_ROTATE = "art_rotate_screen"
     const val F_ART_PATCH = "art_auto_patch"
     const val F_ART_RESOLUTION = "art_resolution"
@@ -52,6 +66,8 @@ object PerGameSettingsStore {
     const val F_ART_SURFACE_CACHE_SIZE = "art_surface_cache_size"
     const val F_ART_FONT_CACHE_SIZE = "art_font_cache_size"
     const val F_ART_POWER_SAVING = "art_power_saving"
+    const val F_ART_ANIME4K_ENABLED = "art_anime4k_enabled"
+    const val F_ART_ANIME4K_MODE = "art_anime4k_mode"
 
     // RPG Maker MV/MZ
     const val F_RPG_MAKER_MOD_ENABLED = "rpg_maker_mod_enabled"
@@ -90,6 +106,7 @@ object PerGameSettingsStore {
 
     // Tyrano 与 RPG Maker Web 共用的存档目录开关（GameSaveManager 按此键读取）
     const val F_TY_SCOPED = "ty_scoped"
+    const val F_TY_EXTERNAL = "ty_external"
 
     // Ren'Py（外置模块版本选择）
     const val F_RENPY_VERSION = "renpy_engine_version"
@@ -108,6 +125,13 @@ object PerGameSettingsStore {
 
     // FVP（文本编码/系统字体回退/HiDPI/自定义字体覆盖；null=跟随全局）
     const val F_FVP_NLS = "fvp_nls"
+    const val F_ETHORNELL_NLS = "ethornell_nls"
+    const val F_ETHORNELL_FONT = "ethornell_font"
+    const val F_CMVS_FONT = "cmvs_font"
+    const val F_SYSTEMNNN_FULLSCREEN = "systemnnn_fullscreen"
+    const val F_SYSTEMNNN_READING_SIZE = "systemnnn_reading_size"
+    const val F_SYSTEMNNN_EXE_ANALYSIS = "systemnnn_exe_analysis"
+    const val F_SYSTEMNNN_DEBUG_MODE = "systemnnn_debug_mode"
     const val F_FVP_SYSTEM_FONT = "fvp_system_font"
     const val F_FVP_TEXT_HIDPI = "fvp_text_hidpi"
     const val F_FVP_FONT = "fvp_font"
@@ -118,7 +142,19 @@ object PerGameSettingsStore {
     const val F_XSYS35_INTEGER_SCALE = "xsys35_integer_scale"
     const val F_XSYS35_MUTE_UNFOCUS = "xsys35_mute_unfocus"
 
+    // System4（独立存档/文本编码/自定义字体/手柄/跳字延迟覆盖；null=跟随全局）
+    const val F_XSYS4_SCOPED_SAVE_DIR = "xsys4_scoped_save_dir"
+    const val F_XSYS4_ENCODING = "xsys4_encoding"
+    const val F_XSYS4_FONT_GOTHIC_PATH = "xsys4_font_gothic_path"
+    const val F_XSYS4_FONT_MINCHO_PATH = "xsys4_font_mincho_path"
+    const val F_XSYS4_JOYPAD = "xsys4_joypad"
+    const val F_XSYS4_MSGSKIP_DELAY = "xsys4_msgskip_delay"
+
     // Winlator 外置启动（null=跟随全局；字符串 "" = 显式不下发该参数）
+    const val F_WINLATOR_MODE = "winlator_mode"
+    const val WINLATOR_MODE_GLOBAL = "global"
+    const val WINLATOR_MODE_CONTAINER = "container"
+    const val WINLATOR_MODE_CUSTOM = "custom"
     const val F_WINLATOR_CONTAINER_ID = "winlator_container_id"
     const val F_WINLATOR_CONTAINER_NAME = "winlator_container_name"
     const val F_WINLATOR_GRAPHICS_DRIVER = "winlator_graphics_driver"
@@ -139,6 +175,22 @@ object PerGameSettingsStore {
     const val F_RENPY_LESS_UPDATES = "renpy_less_updates"
     const val F_RENPY_DONT_USE_GL2 = "renpy_dont_use_gl2"
     const val F_RENPY_RECOMPILE = "renpy_recompile"
+
+    // Ruffle 外置模块配置覆盖（与全局键同名；null=跟随全局）
+    const val F_RUFFLE_SCREEN_TIMEOUT = "ruffle_screen_timeout"
+    const val F_RUFFLE_BACKEND = "ruffle_backend"
+    const val F_RUFFLE_QUALITY = "ruffle_quality"
+    const val F_RUFFLE_SCALE_MODE = "ruffle_scale_mode"
+    const val F_RUFFLE_LETTERBOX = "ruffle_letterbox"
+    const val F_RUFFLE_LOAD_BEHAVIOR = "ruffle_load_behavior"
+    // MAGES.（impacto）宿主配置覆盖（与全局键同名；null=跟随全局）
+    const val F_IMPACTO_SWAP_CONFIRM_CANCEL = "impacto_swap_confirm_cancel"
+    const val F_IMPACTO_VSYNC = "impacto_vsync"
+    const val F_IMPACTO_VIDEO_PLAYBACK = "impacto_video_playback"
+    const val F_IMPACTO_SUBTITLES = "impacto_subtitles"
+    const val F_IMPACTO_CLOSE_BACKLOG_AT_END = "impacto_close_backlog_at_end"
+    const val F_IMPACTO_DELUSION_MOUSE = "impacto_delusion_mouse"
+    const val F_IMPACTO_LOG_LEVEL = "impacto_log_level"
 
     // ONS 子对象键
     const val ONS_KEY = "ons"
@@ -168,6 +220,53 @@ object PerGameSettingsStore {
         return runCatching { GameOverridePartitions.assemble(row) }.getOrDefault(JSONObject())
     }
 
+    /** Read the current module's isolated overrides (never returns module defaults). */
+    fun getRuntimeModuleSettings(context: Context, gameUri: String, packageName: String): JSONObject {
+        if (gameUri.isBlank() || packageName.isBlank()) return JSONObject()
+        return load(context, gameUri)
+            .optJSONObject(GameOverridePartitions.KEY_RUNTIME_MODULE_SETTINGS)
+            ?.optJSONObject(packageName)
+            ?.let { JSONObject(it.toString()) }
+            ?: JSONObject()
+    }
+
+    /** Persist a validated module-only override object and await both prefs mirror and Room write. */
+    suspend fun saveRuntimeModuleSettings(
+        context: Context,
+        gameUri: String,
+        packageName: String,
+        spec: RuntimeModuleSettingsSpec,
+        overrides: JSONObject,
+    ): RuntimeModuleSettingsSaveResult = when (
+        val result = GameOverridesRepository.writeRuntimeModuleSettings(context, gameUri, packageName, spec, overrides)
+    ) {
+        GameOverridesRepository.RuntimeSettingsWriteResult.Saved -> RuntimeModuleSettingsSaveResult.Saved
+        GameOverridesRepository.RuntimeSettingsWriteResult.GameMissing -> RuntimeModuleSettingsSaveResult.GameMissing
+        GameOverridesRepository.RuntimeSettingsWriteResult.BindingChanged -> RuntimeModuleSettingsSaveResult.BindingChanged
+        GameOverridesRepository.RuntimeSettingsWriteResult.ModuleDisabled -> RuntimeModuleSettingsSaveResult.ModuleDisabled
+        GameOverridesRepository.RuntimeSettingsWriteResult.DescriptorChanged -> RuntimeModuleSettingsSaveResult.DescriptorChanged
+        GameOverridesRepository.RuntimeSettingsWriteResult.InvalidValues -> RuntimeModuleSettingsSaveResult.InvalidValues
+        is GameOverridesRepository.RuntimeSettingsWriteResult.StorageFailure ->
+            RuntimeModuleSettingsSaveResult.StorageFailure(result.detail)
+    }
+
+    suspend fun clearRuntimeModuleSettings(
+        context: Context,
+        gameUri: String,
+        packageName: String,
+        spec: RuntimeModuleSettingsSpec,
+    ): RuntimeModuleSettingsSaveResult = saveRuntimeModuleSettings(
+        context, gameUri, packageName, spec, JSONObject(),
+    )
+
+    fun getGraphicsOverride(context: Context, gameId: String, family: GraphicsFamily): GraphicsOverride =
+        GraphicsSettingsCodec.readOverride(load(context, gameId), family)
+
+    /** Keeps the version marker even for full inheritance, and preserves every unrelated/legacy key. */
+    fun setGraphicsOverride(context: Context, gameId: String, family: GraphicsFamily, value: GraphicsOverride) {
+        update(context, gameId) { put(family.overrideKey, GraphicsSettingsCodec.encode(value)) }
+    }
+
     /** 字符串字段覆盖值；null=未覆盖（跟随全局），""=覆盖为空串（如内置字体）。 */
     fun getStr(context: Context, gameId: String, key: String): String? {
         val j = load(context, gameId)
@@ -182,18 +281,12 @@ object PerGameSettingsStore {
 
     /** 设置字符串覆盖；value=null 表示移除该覆盖（跟随全局）。 */
     fun setStr(context: Context, gameId: String, key: String, value: String?) {
-        if (gameId.isBlank()) return
-        val j = load(context, gameId)
-        if (value == null) j.remove(key) else j.put(key, value.trim())
-        persist(context, gameId, j)
+        update(context, gameId) { put(key, value?.trim()) }
     }
 
     /** 设置布尔覆盖；value=null 表示移除该覆盖（跟随全局）。 */
     fun setBool(context: Context, gameId: String, key: String, value: Boolean?) {
-        if (gameId.isBlank()) return
-        val j = load(context, gameId)
-        if (value == null) j.remove(key) else j.put(key, value)
-        persist(context, gameId, j)
+        update(context, gameId) { put(key, value) }
     }
 
     /** 读取 ONS 覆盖子对象（缺失字段=跟随全局）。 */
@@ -218,10 +311,7 @@ object PerGameSettingsStore {
 
     /** 保存 ONS 覆盖子对象。 */
     fun setOnsOverride(context: Context, gameId: String, ons: JSONObject) {
-        if (gameId.isBlank()) return
-        val j = load(context, gameId)
-        j.put(ONS_KEY, ons)
-        persist(context, gameId, j)
+        update(context, gameId) { put(ONS_KEY, ons) }
     }
 
     /**
@@ -255,6 +345,22 @@ object PerGameSettingsStore {
         return override.takeIf { it != RpgMakerOverride() }
     }
 
+    /** 一次写入 Ren'Py 版本和全部开关，保留同一游戏的其他覆盖。 */
+    fun setRenPyOverrides(context: Context, gameId: String, version: String?, override: RenPyOverride) {
+        update(context, gameId) {
+            put(F_RENPY_VERSION, version?.trim())
+            put(F_RENPY_CHEATS, override.cheats)
+            put(F_RENPY_HW_VIDEO, override.hwVideo)
+            put(F_RENPY_AUTOSAVE, override.autosave)
+            put(F_RENPY_PHONE_SMALL_VARIANT, override.phoneSmallVariant)
+            put(F_RENPY_VSYNC, override.vsync)
+            put(F_RENPY_LESS_MEMORY, override.lessMemory)
+            put(F_RENPY_LESS_UPDATES, override.lessUpdates)
+            put(F_RENPY_DONT_USE_GL2, override.dontUseGl2)
+            put(F_RENPY_RECOMPILE, override.recompile)
+        }
+    }
+
     /**
      * Ren'Py 外置模块覆盖快照 → 类型化模型（缺失字段=跟随全局，
      * 供 [EffectiveEngineSettings.mergeRenPy] 使用）。版本键不在此列。
@@ -277,6 +383,118 @@ object PerGameSettingsStore {
     }
 
     /**
+     * Ruffle 外置模块覆盖快照 → 类型化模型（缺失字段=跟随全局，
+     * 供 [EffectiveEngineSettings.mergeRuffle] 使用）。screenTimeout 按字符串存储以保持覆盖层一致。
+     */
+    fun toRuffleOverride(json: JSONObject?): RuffleOverride? {
+        if (json == null) return null
+        // 五个枚举字段统一 trim/lowercase，保证 load → merge → save 使用同一比较口径；
+        // screenTimeout 是数值字符串，交给 mergeRuffle 自行 trim + toIntOrNull。
+        fun strOrNull(key: String): String? =
+            if (json.has(key)) json.optString(key).trim().lowercase(Locale.ROOT) else null
+        val override = RuffleOverride(
+            screenTimeout = if (json.has(F_RUFFLE_SCREEN_TIMEOUT)) json.optString(F_RUFFLE_SCREEN_TIMEOUT) else null,
+            backend = strOrNull(F_RUFFLE_BACKEND),
+            quality = strOrNull(F_RUFFLE_QUALITY),
+            scaleMode = strOrNull(F_RUFFLE_SCALE_MODE),
+            letterbox = strOrNull(F_RUFFLE_LETTERBOX),
+            loadBehavior = strOrNull(F_RUFFLE_LOAD_BEHAVIOR),
+        )
+        return override.takeIf { it != RuffleOverride() }
+    }
+
+    /**
+     * MAGES.（impacto）宿主覆盖快照 → 类型化模型（缺失字段=跟随全局，
+     * 供 [EffectiveEngineSettings.mergeImpacto] 使用）。日志等级 trim/lowercase 后再比较。
+     */
+    fun toImpactoOverride(json: JSONObject?): ImpactoOverride? {
+        if (json == null) return null
+        fun boolOrNull(key: String): Boolean? = if (json.has(key)) json.optBoolean(key) else null
+        val override = ImpactoOverride(
+            swapConfirmCancel = boolOrNull(F_IMPACTO_SWAP_CONFIRM_CANCEL),
+            vsync = boolOrNull(F_IMPACTO_VSYNC),
+            videoPlayback = boolOrNull(F_IMPACTO_VIDEO_PLAYBACK),
+            subtitles = if (json.has(F_IMPACTO_SUBTITLES)) {
+                json.optString(F_IMPACTO_SUBTITLES).trim().lowercase(Locale.ROOT)
+            } else {
+                null
+            },
+            closeBacklogAtEnd = boolOrNull(F_IMPACTO_CLOSE_BACKLOG_AT_END),
+            delusionMouse = boolOrNull(F_IMPACTO_DELUSION_MOUSE),
+            logLevel = if (json.has(F_IMPACTO_LOG_LEVEL)) {
+                json.optString(F_IMPACTO_LOG_LEVEL).trim().lowercase(Locale.ROOT)
+            } else {
+                null
+            },
+        )
+        return override.takeIf { it != ImpactoOverride() }
+    }
+
+    /**
+     * 1.61 的六个旧参数键：只用于「六键都存在且全为空串 → 跟随容器」的迁移判定。
+     * 新增覆盖字段时不要动这个列表，否则历史记录会被误判。
+     */
+    private val LEGACY_CONTAINER_FIELDS = listOf(
+        F_WINLATOR_GRAPHICS_DRIVER,
+        F_WINLATOR_DXWRAPPER,
+        F_WINLATOR_SCREEN_SIZE,
+        F_WINLATOR_LC_ALL,
+        F_WINLATOR_TZ,
+        F_WINLATOR_BOX64_PRESET,
+    )
+
+    /**
+     * 当前全部逐游戏参数覆盖键（独立清单，不等于旧六键）：新增字段必须同时登记到这里，
+     * 否则「只写了新字段」的记录会被判成全局。
+     */
+    internal val CURRENT_OVERRIDE_FIELDS = listOf(
+        F_WINLATOR_GRAPHICS_DRIVER,
+        F_WINLATOR_DXWRAPPER,
+        F_WINLATOR_SCREEN_SIZE,
+        F_WINLATOR_LC_ALL,
+        F_WINLATOR_TZ,
+        F_WINLATOR_BOX64_PRESET,
+    )
+
+    /**
+     * 单游戏运行模式：global（默认）/ container / custom。
+     * 旧数据严格按 1.61 的 null / "" / 值语义迁移。
+     */
+    fun getWinlatorMode(context: Context, gameId: String): String = inferWinlatorMode(load(context, gameId))
+
+    /** [getWinlatorMode] 的纯函数部分：按 1.61 的 null / "" / 值语义推断模式，便于 JVM 回归。 */
+    internal fun inferWinlatorMode(json: JSONObject): String {
+        val mode = json.optString(F_WINLATOR_MODE, "")
+        if (mode == WINLATOR_MODE_GLOBAL || mode == WINLATOR_MODE_CONTAINER || mode == WINLATOR_MODE_CUSTOM) {
+            return mode
+        }
+        // 未知的非空 mode 不直接判全局：继续走下面的字段推断，尽量保留可解释的旧数据。
+
+        val legacyPresent = LEGACY_CONTAINER_FIELDS.filter { json.has(it) }
+        val legacyAllBlank =
+            legacyPresent.size == LEGACY_CONTAINER_FIELDS.size &&
+                LEGACY_CONTAINER_FIELDS.all { json.optString(it).isEmpty() }
+        // 任一当前覆盖字段有值即自定义；用当前字段清单而不是「旧六键数量」，避免新增字段被漏判。
+        val anyNonEmptyCurrent = CURRENT_OVERRIDE_FIELDS.any { json.has(it) && json.optString(it).isNotEmpty() }
+        if (anyNonEmptyCurrent) return WINLATOR_MODE_CUSTOM
+        // 六个旧参数全空是「跟随容器」的强信号，必须优先于单独出现的容器字段判断：
+        // 这类记录在 1.61 里本来就走容器基线，若判成 custom 会把 save 继承成全局值。
+        if (legacyAllBlank) return WINLATOR_MODE_CONTAINER
+        if (legacyPresent.isNotEmpty()) return WINLATOR_MODE_CUSTOM
+        if (json.has(F_WINLATOR_CONTAINER_ID) || json.has(F_WINLATOR_CONTAINER_NAME)) {
+            return WINLATOR_MODE_CUSTOM
+        }
+        // save 是真实的逐游戏覆盖（仅「自定义」模式写入）：只有它一条的旧记录不能回落到全局，
+        // 否则会丢掉玩家原有的「写回容器配置」。
+        if (json.has(F_WINLATOR_SAVE)) return WINLATOR_MODE_CUSTOM
+        return WINLATOR_MODE_GLOBAL
+    }
+
+    fun setWinlatorMode(context: Context, gameId: String, mode: String) {
+        setStr(context, gameId, F_WINLATOR_MODE, mode)
+    }
+
+    /**
      * Winlator 外置启动覆盖快照 → 类型化模型（缺失字段=跟随全局；存在但为空串=显式不下发该参数，
      * 供 [EffectiveEngineSettings.mergeWinlator] 使用）。
      */
@@ -285,6 +503,8 @@ object PerGameSettingsStore {
         fun boolOrNull(key: String): Boolean? = if (json.has(key)) json.optBoolean(key) else null
         fun strOrNull(key: String): String? = if (json.has(key)) json.optString(key) else null
         val override = WinlatorOverride(
+            // 旧数据的 "" 与 null 语义不同："" = 显式不下发该字段（1.61 的弹窗确认空值），
+            // null = 未覆盖、继承全局。不能把空串归一成 null，否则升级后会改用全局容器。
             containerId = strOrNull(F_WINLATOR_CONTAINER_ID),
             containerName = strOrNull(F_WINLATOR_CONTAINER_NAME),
             graphicsDriver = strOrNull(F_WINLATOR_GRAPHICS_DRIVER),
@@ -301,21 +521,25 @@ object PerGameSettingsStore {
     /** 清除某游戏全部覆盖，回退到全局默认。 */
     fun clear(context: Context, gameId: String) {
         if (gameId.isBlank()) return
-        GameOverridesRepository.clearRow(context, gameId)
-        prefs(context).edit().remove(gameId).apply()
+        GameOverridesRepository.ensureSyncedBlocking(context)
+        synchronized(GameOverridesRepository.runtimeModuleSettingsMirrorLock) {
+            GameOverridesRepository.clearRow(context, gameId)
+            prefs(context).edit().remove(gameId).apply()
+        }
     }
 
-    /**
-     * 双写持久化：DB 异步落库（失败仅记日志），prefs 同步镜像立即刷盘——
-     * 引擎子进程启动游戏时按契约整条读取镜像（方案阶段 4 过渡策略）。
-     *
-     * 写路径已全部收敛到 app 侧：引擎只读镜像，不再回写任何字段，因此不存在
-     * 「app 进程的 prefs 缓存与引擎写入互相覆盖」的问题（跨进程 prefs 缓存不共享，
-     * 但单向只读不受其影响）。镜像的权威来源仍是 DB，进程启动时由
-     * `GameOverridesRepository.syncFromPrefs` 回灌保证历史数据不丢。
-     */
-    private fun persist(context: Context, gameId: String, record: JSONObject) {
-        GameOverridesRepository.updateRecord(context, gameId, record)
-        prefs(context).edit().putString(gameId, record.toString()).apply()
+    /** 在同一把锁内读取最新镜像、修改字段并发布。Room 通过写队列按顺序落库。 */
+    private fun update(context: Context, gameId: String, mutate: JSONObject.() -> Unit) {
+        if (gameId.isBlank()) return
+        GameOverridesRepository.ensureSyncedBlocking(context)
+        synchronized(GameOverridesRepository.runtimeModuleSettingsMirrorLock) {
+            val preferences = prefs(context)
+            val record = preferences.getString(gameId, null)
+                ?.let { runCatching { JSONObject(it) }.getOrNull() }
+                ?: JSONObject()
+            record.mutate()
+            GameOverridesRepository.updateRecord(context, gameId, record)
+            preferences.edit().putString(gameId, record.toString()).apply()
+        }
     }
 }

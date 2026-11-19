@@ -1,281 +1,463 @@
-# Tyranor Next — Domain Context
+# Tyranor Next — 领域上下文
 
-An Android multi-engine visual novel (Galgame) aggregator launcher, rewritten by reverse engineering the Tyranor emulator: it recognizes and launches games orchestrated by engines such as KiriKiri / ONScripter / Tyrano / Artemis / Siglus / YU-RIS / CatSystem2 / PC (manually added) / RPG Maker / Ren'Py, and provides game library management, cover fetching, save mirroring, and engine parameter tuning. This context defines the core terms established in this domain.
+Tyranor Next 是面向 Android 的多引擎视觉小说（Galgame）聚合启动器。本上下文定义游戏库、运行环境及应用侧工具使用的项目术语。
 
-## Engines and Runtimes
+相关文档：[SPEC.md](SPEC.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [AGENTS.md](AGENTS.md)
 
-**Engine (EngineType)**:
-The runtime family a game belongs to, determined during scanning by directory characteristics (script/resource files): KIRIKIRI, ONS, TYRANO, RPG Maker (RGSS series), RPG_MV, RPG_MZ, VN, WebOther, ARTEMIS, SIGLUS, REALLIVE, AVG32, XSYS35, UK2, FVP, RENPY, YURIS, CATSYSTEM2, PC, ANDROID_APP, UNKNOWN.
-_Avoid_: game genre, format
+## 引擎与运行时
 
-**Built-in Engine**:
-Engine runtimes shipped with the app that run without an external installation (Kirikiroid2 / krkrsdl3, ONScripter, Artemis, Siglus (siglus_rs Rust runtime), RealLive / AVG32 / UK2 (siglus_rs game_launcher software-rendering runtimes), FVP (rfvp Rust runtime), System35 (xsystem35), Tyrano web shell). RPG Maker MV/MZ are hosted by the built-in Web runtime.
-_Avoid_: prebuilt engine, bundled engine
+**游戏时长**:
+从 Tyranor Next 启动的内置引擎游戏在前台运行的累计时间，包含加载、标题菜单、自动播放与游戏内视频，后台及锁屏时间不计入。它与「最近打开」记录独立，不代表玩家持续操作或游戏已成功显示首帧。
+_Avoid_: 在线时长、进程存活时间、存档时长
 
-**Visual Novel Engine Group (Framebuffer engines)**:
-Collective name for the three software-rendering engines (RealLive, AVG32, UK2) hosted by the game_launcher runtime besides Siglus: the engine outputs RGBA framebuffers frame by frame, the host `FramebufferGameActivity` copies them into a Bitmap for presentation and forwards pointer/keyboard/text input; text encoding (NLS) follows the global/per-game settings.
-_Avoid_: software rendering engine, game_fb engine
+**引擎（EngineType）**:
+游戏库用于区分游戏运行时家族与外部启动类别的分类。
+_Avoid_: 游戏类型、格式
 
-**External APK Engine Module (External Engine Module)**:
-An engine runtime distributed as a standalone APK that the user must install/download (Ren'Py 8.5/7.7.1, RPG Maker XP/VX/VX Ace/mkxp-z); the registry (ExternalEngineModuleRegistry) resolves the target module by engine + version, and launching pulls it up through an Intent protocol.
-_Avoid_: plugin, engine DLC
+**内置引擎**:
+随 App 分发、无需外置安装的引擎运行时（Kirikiroid2 / krkrsdl3、ONScripter、Artemis、Siglus（siglus_rs Rust 运行时）、RealLive / AVG32 / UK2（siglus_rs game_launcher 软渲染运行时）、FVP（rfvp Rust 运行时）、System35（xsystem35）、System4（xsystem4，与 System35 共用 libSDL2x）、SystemNNN、Ethornell / BGI（实验接入，兼容性未验收）、CMVS（cmvs-rs Rust 运行时，NativeActivity + loader）、Tyrano 网页壳）。RPG Maker MV/MZ 由内置 Web 运行环境承载。
+_Avoid_: 预制引擎、捆绑引擎
 
-**PC Game (manually added)**:
-A Windows program that does not belong to a recognized engine family and that the user adds to the library manually via the games page top bar "Add game → Add PC game": choose a directory + specify a launch exe (stored in `launchFile`, switchable at any time); launching goes through the external Winlator; it does not participate in scanning and is not included in save management or engine configuration.
-_Avoid_: unknown engine, Winlator game
+**引擎运行库包（Runtime Pack）**:
+`NativeRuntimePack` 按引擎家族把大体积预编译库（`libsiglus` / `librfvp` / `libethornell` / `libkrkrsdl3` / IJK 三件套 / System35/4 / `libcmvs_android` / `libsystemnnn`）打成 `assets/engine-runtime/<pack>.zip.xz`，首次启动对应引擎时解压到 `files/engine_runtime/<pack>/` 供宿主按绝对路径 dlopen 的分发单位；`libSDL3.so` 与 `libSDL2_mixer_xs35.so` 不属于运行库包，仍随 APK `lib/`。
+_Avoid_: 运行时模块、内置引擎、原生插件
 
-**Android Game (manually added)**:
-An Android app that does not belong to a recognized engine family and that the user adds to the library manually via the games page top bar "Add game → Add Android game" from the list of installed launchable apps: the library primary key is `uri = androidapp://<package name>`, the package name is stored in `launchTarget`, and launching jumps directly to that app by package name; it does not participate in scanning and is not included in save management or engine configuration.
-_Avoid_: app shortcut, external emulator game
+**Ethornell / BGI（ETHORNELL）**:
+以 ethornell-rs 重实现承载的实验性内置引擎家族，支持扫描、启动、设置及存档备份/恢复/删除；存档位于游戏目录内的 `savedata`，旧私有存档仅作为一次性迁移来源。该能力不等于商业游戏完整兼容或 PC 存档互通。
+_Avoid_: Winlator BGI 插件、完整 BGI 支持
 
-**External Emulator Jump**:
-Handing a game over to a standalone emulator/emulator-style runtime that the user installed themselves (PPSSPP, Eden, Winlator); the main app only performs recognition, installation probing, and explicit component Intent jumps, and does not take over its saves or settings. YU-RIS takes the "directory + main exe" form and is launched through the Winlator external launch protocol (`dir_path` + relative `exe_path`, with automatic temporary mounting of an idle drive letter).
-_Avoid_: external module (referring to APK engine modules), built-in engine
+**System3.x / System4（XSYS35 / XSYS4）**:
+AliceSoft 的两代引擎，各为独立的引擎类型（XSYS35 对应 System 3.x，XSYS4 对应 System 4）：目录特征、启动参数与设置互不相同，不合并为一类。
+_Avoid_: System3/4、AliceSoft 引擎
 
-**Engine Web Shell (Tyranor Web Runtime)**:
-The built-in Web runtime that hosts web-form games such as TyranoBuilder, WebOther, VN, and RPG Maker MV/MZ; every engine shares the same web shell version (Tyranor-2.3.4, bundled in the original reverse-engineered app).
-_Avoid_: Chrome, NW.js environment
+**SystemNNN（SYSTEMNNN）**:
+由 tinyan 开发的视觉小说引擎家族。Tyranor Next 的内置实现由 Emberfall 承载。
+_Avoid_: Emberfall 独立播放器、第三方运行时模块
+
+**视觉小说引擎组（Framebuffer 引擎）**:
+Siglus 之外由 game_launcher 运行库承载的三个软件渲染引擎（RealLive、AVG32、UK2）的统称：引擎逐帧输出 RGBA 帧缓冲，宿主 `FramebufferGameActivity` 拷进 Bitmap 呈现并转发指针/键盘/文本输入；文本编码（NLS）按全局/单游戏设置。
+_Avoid_: 软渲染引擎、game_fb 引擎
+
+**外置 APK 引擎模块（External Engine Module）**:
+以独立 Android 应用形式分发、由用户另行安装的引擎运行时，用于承载 Ren'Py、RPG Maker RGSS、Ruffle（SWF / Flash）与 MAGES. 等游戏，由固定包名与静态注册表管理，与动态发现的「第三方 APK 运行时模块」是两套体系。游戏由模块运行，主 App 管理扫描、安装状态、启动协议及 Android 11 及以上 Ren’Py 的游戏目录存档；Ren’Py 8.5.0 与 8.5.3 为分别可选的同包名版本，设备上一次只能安装其中一版。
+_Avoid_: 插件、引擎 DLC、第三方 APK 运行时模块（另一体系）
+
+**MAGES. 引擎（EngineType.IMPACTO）**:
+MAGES.（前 5pb.）的视觉小说引擎（SC3 脚本，如 Memories Off 6、Chaos;Child、Robotics;Notes 等）；Tyranor 通过外置 Impacto 宿主 APK 承载其开源重新实现 impacto 来运行这类游戏。「impacto」是项目 / 宿主名，不是引擎名；`EngineType.IMPACTO` 等代码标识沿用项目名。
+_Avoid_: 把 Impacto 当作引擎名（界面、文档中的引擎名一律写 MAGES.）
+
+**MAGES. 语言变体（Language Variant）**:
+同一份 Windows／Steam 版《秋之回忆6》数据按文本语言（日文、简体、繁体）对应的三个启动 profile 之一，三者构成一个变体族。宿主按「profile + 目录」隔离存档，所以换变体等于换一份存档。
+_Avoid_: 语言包、语言补丁
+
+**第三方 APK 运行时模块（Third-party APK Runtime Module）**:
+用户自行安装、以 `com.tyranor.runtime.` 包名前缀并声明 `com.tyranor.runtime.action.LAUNCH` 的独立 APK，接收游戏文件夹路径自行运行游戏。主 App 负责发现、启用、扫描与交棒，并按模块可选声明提供单游戏配置及游戏目录内的统一存档管理。
+_Avoid_: 插件、外置引擎（指 JoiPlay 时）、外置 APK 引擎模块（指 JoiPlay 注册表体系时）
+
+**运行时模块绑定（Runtime Module Binding）**:
+`ScanGame.runtimeModulePackage` 记录的游戏与第三方 APK 运行时模块包名之间的关系；模块卸载或禁用后游戏降级为 `UNKNOWN`，但保留最后已知包名用于重扫合并与恢复，重装或启用后只能经重新扫描恢复。
+_Avoid_: 手动绑定、模块别名、externalModuleAlias
+
+**模块扫描描述（Runtime Module Scan Descriptor）**:
+第三方运行时模块在自己 `res/raw/tyranor_runtime.json` 中声明的 `extensions` / `markers`（及 `match`），是主 App 自动扫描该模块游戏的唯一特征来源；在允许模块匹配的目录中优先于内置识别，未命中再由内置规则补充。
+_Avoid_: 内置特征库、插件清单、手动绑定
+
+**模块设置描述（Runtime Module Settings Descriptor）**:
+第三方 APK 运行时模块声明的单游戏设置项、类型、约束与默认值；用户覆盖值优先于模块默认值，不继承全局引擎配置。
+_Avoid_: 模块全局设置、JoiPlay settings
+
+**模块存档声明（Runtime Module Save Descriptor）**:
+第三方 APK 运行时模块声明的游戏目录内固定存档子目录，是该模块游戏接入统一文件存档管理的能力依据。它不代表搬迁存档或授权访问模块私有数据。
+_Avoid_: 全局存档目录、存档重定向
+
+**模块文件导入声明（Runtime Module File Import Descriptor）**:
+第三方 APK 运行时模块声明的游戏目录内导入目标；用户选取文件并确认后，主 App 将文件新增或覆盖到该目标。它不是启动配置或存档声明。
+
+**PC 游戏（手动添加）**:
+用户手动加入游戏库、经外置 Winlator 运行的 Windows 程序，不限定为已识别的视觉小说引擎家族。其运行参数属于 Winlator 设置域。
+_Avoid_: 未知引擎、Winlator 游戏
+
+**安卓游戏（手动添加）**:
+用户从已安装应用中手动加入游戏库的 Android 游戏记录，属于外部应用入口。
+_Avoid_: 应用快捷方式、外置模拟器游戏
+
+**外置模拟器跳转（External Emulator Jump）**:
+由用户另行安装的独立模拟器或兼容运行环境承接游戏的启动方式，包括 PPSSPP、Eden 与 Winlator。
+_Avoid_: 外置模块（指 JoiPlay 外置 APK 引擎模块时）、第三方 APK 运行时模块、内置引擎
+
+**引擎网页壳（Tyranor Web 运行环境）**:
+内置 Web 运行时，承载 TyranoBuilder、WebOther、VN、RPG Maker MV/MZ 等网页形态游戏；各引擎共用同一颗网页壳版本（Tyranor-2.3.4，为原逆向 app 内置）。
+_Avoid_: Chrome、NW.js 环境
 
 **TynMV / TynMZ**:
-Engine version codenames newly introduced by TyranorNext for RPG Maker MV / MZ (TynMV-0.1/0.2, TynMZ-0.1), distinct from the web shell version bundled in the original reverse-engineered build. In the engine page dialog the reimplemented series is displayed merged as "TyranorNext-0.1/0.2", while the engine settings dropdown lists them item by item under the Tyn names.
-_Avoid_: v0/v1/v2 (old numbering)
+RPG Maker MV / MZ 在 TyranorNext 中新引入的引擎版本代号（TynMV-0.1/0.2、TynMZ-0.1），区别于原逆向内置的网页壳版本。引擎页弹窗中重实现系列以「TyranorNext-0.1/0.2」合并显示，引擎设置下拉则以 Tyn 命名逐项列出。
+_Avoid_: v0/v1/v2（旧编号）
 
-**Engine Kernel**:
-The replaceable low-level runtime within the same engine family (KiriKiri family: Kirikiroid2 and krkrsdl3), selectable in engine settings.
-_Avoid_: renderer, backend
+**引擎内核（Kernel）**:
+同一引擎家族下的可替换底层运行时（KiriKiri 家族：Kirikiroid2 与 krkrsdl3），可在引擎设置中选择。
+_Avoid_: 渲染器、后端
 
-**Patch Overlay**:
-A virtual `patch.tjs` overlay directory generated when launching KiriKiri games to support scenarios such as Steam plugins; behavior is controlled by the "auto / force / off" mode.
-_Avoid_: patch, hook
+**SDL2 共享运行库（libSDL2x / app32）**:
+System35 与 System4 共用的 SDL2 2.32.10 原生库（`libSDL2x.so`）与重命名 Java 层（`org.libsdl.app32`），与 ONS 的 SDL2 2.26.3（`libSDL2.so` / `org.libsdl.app`）并存、互不替代。
+_Avoid_: SDL 补丁版、第二套 SDL
 
-**autopatch policy**:
-The decision policy for idempotently patching required files (system.ini, list_windows, movie, etc.) before launching Artemis: "ask on launch / auto / off", carried by a shared confirmation dialog; **off by default** (`ART_PATCH_DEFAULT`, to avoid being equivalent to automatic patching on paths with no dialog).
-_Avoid_: auto patch, ask toggle
+**补丁 overlay（Patch Overlay）**:
+启动 KiriKiri 游戏时为兼容 Steam 插件等场景生成的虚拟 `patch.tjs` overlay 目录；行为由「自动/强制/关闭」模式控制。
+_Avoid_: 补丁、Hook
 
-**Title Feedback**:
-The engine host parses the game title inside the engine process and writes it into shared prefs (`<engine>_title.<pathHash>`); the main app conditionally imports it as the game title when loading the library, overwriting only when the title still equals the directory name registered before launch (i.e. not renamed by the user); both Siglus and System35 use this protocol.
-_Avoid_: auto rename, metadata scraping
+**autopatch 策略**:
+Artemis 启动前对必要文件（system.ini、list_windows、movie 等）进行幂等修补的决策策略：「启动时询问 / 自动 / 关闭」，由共享确认弹窗承载；**默认关闭**（`ART_PATCH_DEFAULT`，避免无弹窗路径下等价于自动补丁）。
+_Avoid_: 自动补丁、提问开关
 
-## Game Library
+**标题回写（Title Feedback）**:
+引擎宿主在引擎进程内解析游戏标题并写入共享 prefs（`<engine>_title.<pathHash>`），主 App 在库加载时条件导入为游戏标题；仅当标题仍等于启动前登记的目录名（未被用户改名）时覆盖；Siglus 与 System35 均使用该协议；System4 不使用该协议，标题在扫描期解析 ini 的 `GameName`。
+_Avoid_: 自动改名、元数据抓取
 
-**Game Scanning (EngineScanner)**:
-The process of traversing authorized directories, determining engine types, and producing scan candidates (ScanGame); the result is persisted as the game library.
-_Avoid_: import, index
+**画质滤镜链**:
+各引擎共用的画质处理装配方式，由用户按顺序组合修复、锐化与放大滤镜，并可移除单个滤镜或配置其参数；实际执行能力取决于所选内核的帧输出入口，单游戏自定义链在切换跟随全局时保留。
+_Avoid_: Anime4K 模式（指整条链时）、固定超分预设
 
-**Scan Candidate (ScanGame)**:
-A single game record produced by one scan/load: title, directory URI, engine, launch target, plus auxiliary fields such as cover/metadata/external module alias.
-_Avoid_: game entry, GameItem
+**滤镜预设分类**:
+将可装配的滤镜按算法家族分组，带预设的家族提供二级选择，单滤镜直接添加；滤镜链保存具体预设或自定义参数，以及顺序。
+_Avoid_: 滤镜组（指单个算法分类时）、分类节点
 
-**Launch Target (launchTarget)**:
-The launch payload interpreted by engine semantics: an auto-detected file path / ROM filename / a directory sentinel for manually added PC games / the package name for manually added Android games; file-type entries can be manually overridden by the per-game setting "launch file" (launchFile).
-_Avoid_: entry file (when confused with launchFile)
+**滤镜贡献**:
+一项可独立加入或移除的滤镜能力，包含具体预设、用户可调参数和展示标识；共享滤镜链按照已提供的贡献装配。
+_Avoid_: 注册枚举、模型规模（指整个贡献时）
 
-**External Module Alias (externalModuleAlias)**:
-The internal identifier of a different sub-runtime under the same engine (e.g. `internal.rpgmxp`), used to resolve the concrete external module; Ren'Py is instead determined by the per-game version setting and does not write this field.
-_Avoid_: module ID
+**纹理行序**:
+滤镜描述符声明的逻辑坐标行方向（顶左或底左）；共享执行器按描述符的 `topLeftCoordinates` 与宿主物理行序的差异适配采样与相位，完整契约见 `docs/graphics-filter-coordinates.md`。
+_Avoid_: Y 翻转（指整个适配契约时）、图像上下颠倒
 
-**Recent Games / Quick Launch**:
-Two aggregate lists on the game library home page: recently opened (shown by timestamp) and user-pinned (quickLaunch, whose count limit is constrained by a DAO constant).
-_Avoid_: history, favorites
+**游戏原始帧**:
+游戏舞台合成后、按显示区域缩放前的画面，包含当时已合成的文本和界面；获取不到可信尺寸时，不将屏幕帧标为原始帧。
+_Avoid_: 屏幕截图、显示分辨率（指原始输入时）
 
-**Sort Key (GameSortKeys)**:
-The shared implementation of the dual-path game title sorting: a lowercased title key + an optional 【】/[] tag key; the Room precomputed column and the UI in-memory sort share the implementation to guarantee identical results.
-_Avoid_: sort method (when confused with the GAME_SORT_* enums)
+**尺寸限制舞台输出**:
+以游戏逻辑像素尺度输出完整合成画面，再由显示层执行滤镜链并适配屏幕的接入方式；保留舞台外叠加内容时可包含画布留白，滤镜输入尺寸以实际处理画布为准。尺寸可信前的屏幕帧不计为游戏原始帧。
+_Avoid_: 降采样截图、仅修改监测分辨率
 
-**Deleted Cleanup (cleanupDeletedGame)**:
-The cleanup action performed after scanning that removes game library records whose games no longer exist on disk.
-_Avoid_: delete, cleanup
+**等比放大目标**:
+按照输入帧比例、在当前屏幕表面范围内容纳的最大处理输出尺寸；适应模式直接使用该尺寸；固定原生倍率的滤镜可由显示层另行缩放。
+_Avoid_: 固定两倍、分别拉伸宽高
 
-**Game Library Facade (GameLibraryFacade)**:
-The game library integration facade split out of EngineScanner: it holds the in-memory caches and revision numbers for games/recent/quick/scan roots and provides synchronous "cache first, persistence queued" writes; EngineScanner keeps only scanning and engine recognition.
-_Avoid_: Scanner cache, gallery repository (Repository refers to the persistence layer)
+**Artemis 画质增强**:
+在受支持的 Artemis 内核已合成的完整舞台帧上执行画质滤镜链的能力；输入包含当时已合成的文本和界面，支持范围按内核版本区分。
+_Avoid_: CNN 超分、素材替换
 
-## Settings System
+**Siglus 画质增强**:
+在 Siglus 已合成、尚未按屏幕缩放的完整舞台帧上执行共用画质滤镜链的能力；输入包含文本和界面，舞台尺寸与素材分辨率分别理解。
+_Avoid_: 素材超分、引擎替换
 
-**App/Engine/Per-game Three-Level Settings**:
-Settings are split into three layers by scope: app settings (AppSettingsStore, global), engine settings (EngineSettingsStore, by engine family), and per-game settings (PerGameSettingsStore, overrides by game); at launch, per-game overrides take effect before global settings.
-_Avoid_: settings priority, global settings
+**画质性能监测**:
+显示滤镜输入、实际处理输出和显示区域尺寸，以及显示帧率和可用的处理耗时；仅在当前内核支持且滤镜链启用时可选。
+_Avoid_: 配置分辨率、引擎循环帧率
 
-**Effective Settings Resolution (EngineSettingsResolver / EffectiveEngineSettings)**:
-The unified resolution entry point for three-level settings: the Resolver reads global and per-game overrides from the two Stores, the pure-function layer EffectiveEngineSettings applies merge rules such as whitelist/kernel fallback, and launching and saving only consume the ResolvedEngineSettings result.
-_Avoid_: settings merge, override layer
 
-**Engine Settings Kind (EngineSettingsKind)**:
-The category entry points of the engine settings page (KRKR / ONS / ARTEMIS / RPG_MAKER / TYRANO / RENPY / SIGLUS / FRAMEBUFFER / FVP / XSYS35 / PPSSPP / WINLATOR), each providing parameter items specific to that engine family.
-_Avoid_: engine settings tab
+## 游戏库
 
-**Nav Style**:
-The four values of the bottom navigation bar style: "Default" (Material3 navigation bar; under glass appearance styles a floating rounded glass bar, with Advanced Glass adding true sampled blur on Android 12+), "Liquid Glass · Classic" (the original small-corner square glass bar + blur), "Liquid Glass · Lens" (see below), and "Floating Button" (see below); switching is immediate in memory. On tablets/large windows the main navigation moves to the side (see "Side Rail"; the floating button and both Liquid Glass tiers do not adapt).
-_Avoid_: bottom bar appearance, theme
+**游戏扫描（EngineScanner）**:
+对授权目录遍历并判定引擎类型、生成扫描候选（ScanGame）的过程；结果落库为游戏库。
+_Avoid_: 导入、索引
 
-**Appearance Style**:
-The visual style choice in app settings: "Default", "Retro Glass" (formerly "Glass"), and "Advanced Glass", three tiers; both glass tiers use a dark background, translucent frosted-glass containers, and 0.5dp strokes, and disable appearance mode/tone switching (the color wheel stays available), with `AppThemeColors.appearanceStyle` / `isGlass` as the single source of truth.
-_Avoid_: glass theme, Theme (when confused with nav style/appearance mode)
+**扫描候选（ScanGame）**:
+一次扫描/加载产出的单条游戏记录：标题、目录 URI 或入口文件 URI、引擎、启动目标，以及封面/元数据/外置模块别名/第三方运行时模块包名等附属字段。
+_Avoid_: 游戏条目、GameItem
 
-**Retro Glass**:
-The second appearance style tier (the persisted value is still `glass`; the display name was renamed from "Glass"): a three-stop vertical black-grey gradient + a white top glow + theme-color diagonal ambient light; cards are 80% dark glass film.
-_Avoid_: glass (when standing alone, refers to this tier)
+**启动目标（launchTarget）**:
+按引擎语义解释的启动载荷：自动探测的文件路径 / ROM 文件名 / 外置模块入口文件名（如 SWF）/ 手动添加 PC 的目录哨兵 / 手动添加安卓游戏的包名；适用时可由单游戏设置的「启动文件」（launchFile）覆盖。
+_Avoid_: 入口文件（与 launchFile 混淆时）
 
-**Advanced Glass**:
-The third appearance style tier (persisted value `glass_advanced`): the background is a multi-pass boxed blurred backdrop (a real image blur; falls back to theme-color soft patches when there is no cover) collaged 2×3 from game covers + dimming + corner vignette; cards are light frosted film (14% white) + a "bright top, dark bottom" gradient stroke + top-edge highlight + soft shadow (`glassShadow`, the same optical combination as the floating default navigation bar); floating elements (default navigation bar, Liquid Glass bottom bar) add true backdrop sampled blur on Android 12+, while separate windows such as dialogs/drawers do not participate in sampling, and the panel base color is instead generated by `rememberAdvancedGlassPanelSurface()` as a gradient sampled from the page background (darkened toward the dark base, retaining a little color, with a scrim); the drawer gradient must be drawn on the content layer.
-_Avoid_: advanced glass theme, liquid glass (exclusive to nav style)
+**外置模块别名（externalModuleAlias）**:
+JoiPlay 外置 APK 引擎模块体系中，同一引擎下不同子运行时或外置模块记录保存的内部标识（如 `internal.rpgmxp`、Ruffle 的 `internal.flash`）：RPG Maker 用它选择子运行时；Ren'Py 改由单游戏版本设置决定，Ruffle 主要作为扫描标记。它不承载第三方 APK 运行时模块的包名（后者见「运行时模块绑定」）。
+_Avoid_: 模块 ID、运行时模块绑定
 
-**Side Rail**:
-The side form of the main navigation on tablets/large windows (sw600dp or width ≥ 840dp), controlled by the app setting "Tablet sidebar" toggle, on by default: it takes the theme's "default navigation bar" form according to the appearance style (default = Material3 `NavigationRail`, retro/advanced glass = floating glass column); both Liquid Glass tiers do not adapt to the rail (they degrade to the theme's default form on tablets); the rail occupies layout width, `glassNavBottomInset()` returns 0, and Advanced Glass uses a separately recorded pure background layer `railBackdrop` for true sampling.
-_Avoid_: navigation drawer (NavigationDrawer), sidebar (when confused with a drawer)
+**文件型外置入口（launchEntryIsFile）**:
+外置模块游戏记录指向单个入口文件而非目录的启动形态（当前为 Ruffle SWF）：扫描以入口文件 URI 为记录身份，启动前解析其父目录，再以 `folder` + `execFile` 交给模块。
+_Avoid_: 单文件游戏（与手动添加的单文件记录混淆时）、目录型外置入口
 
-**Appearance**:
-The light/dark/follow-system theme choice; the effective value takes `AppSettingsStore.isDarkEffective()` as the single source of truth.
-_Avoid_: dark mode (refers to only one of them)
+**最近游戏 / 快捷启动**:
+游戏库首页的两类聚合列表：最近打开（按最近时间排序，竖屏两列、横屏/大屏五列封面卡展示封面与游戏名，长按删除记录）与用户固定（quickLaunch，数量上限由 DAO 常量约束）。小屏快捷启动单卡左右滑动，卡片下方以「当前页胶囊 + 其余圆点」指示页数（0/1 项不显示）。
+_Avoid_: 历史、收藏
 
-**Four-Language Support**:
-The four `strings.xml` sets — English (default, `values`), Indonesian (`values-in`), Simplified Chinese (`values-zh`) and Japanese (`values-ja`) — are forced by tooling to keep identical keys (`checkHardcodedUiStrings`), and hardcoding CJK text in Kotlin sources is forbidden.
-_Avoid_: multilingual, internationalization (in this project it means the enforced consistency of the supported languages)
+**排序键（GameSortKeys）**:
+游戏标题排序的双路径共用实现：小写化标题键 + 可选的【】/[]标签键；Room 预计算列与 UI 内存排序共用保证结果一致。
+_Avoid_: 排序方式（与 GAME_SORT_* 枚举混用）
 
-**Engine Version Options**:
-The version dropdown items in engine settings, provided as an `id → display name` list (auto + concrete versions); the navigation page/dialog share the same data source to guarantee the same order.
-_Avoid_: version list (when confused with dialog items)
+**已删清理（cleanupDeletedGame）**:
+扫描后对磁盘上已不存在的游戏库记录执行移除的清理动作。
+_Avoid_: 删除、清理
 
-## Cover
+**游戏库门面（GameLibraryFacade）**:
+从 EngineScanner 拆出的游戏库集成门面：持有游戏/最近/快捷/扫描根的内存缓存与修订号，提供同步「缓存先行、落库排队」写；EngineScanner 只保留扫描与引擎识别。
+_Avoid_: Scanner 缓存、图库仓库（Repository 指落库层）
 
-**Cover Source**:
-The data sources for fetching covers (VNDB / NextMoe / Hikarinagi / Bangumi / Steam / Local / Custom), with customizable order; Hikarinagi requires an OAuth Client ID, and NextMoe is anonymous with no login.
-_Avoid_: image source, wallpaper source
+**快速入门（Quick Start）**:
+面向首次使用者的功能入门引导，帮助用户熟悉应用的主要界面与功能入口。
+_Avoid_: 欢迎页、演示页（快速入门不创建独立页面）
 
-**Cover Scraping**:
-The process of fetching cover metadata for the game library in bulk or on demand (CoverScraperService + batch task manager + source aggregation), overwriting only cover fields such as coverUri/coverSource.
-_Avoid_: downloading covers, cover update
+**教练层（Onboarding Coach）**:
+叠加在真实主界面上的首次使用引导层，由当前页面的真实控件锚点、聚焦遮罩、连接线和提示气泡组成；它不替代主导航页面，完成或跳过时只移除覆盖层并保留主界面状态。
+_Avoid_: 引导页、教程页面（教练层随主界面导航切换）
 
-**Bind Candidate**:
-The action of the user choosing from candidate covers and persisting a per-game cover; VNDB candidates also carry vndbId / metadataTitle (NextMoe candidates also carry them when they hit a VNDB ref).
-_Avoid_: choose cover, replace
+## 设置体系
 
-**Cover Drill-down**:
-For sources where one work has multiple covers (NextMoe), the flow of first selecting a work in the work candidate list and then picking from the available covers; sources that do not support this flow bind directly when a candidate is tapped.
-_Avoid_: two-step selection, multi-image selection
+**应用/引擎/单游戏三级设置**:
+设置按作用域分三层：应用设置（AppSettingsStore，全局）、引擎设置（EngineSettingsStore，按引擎家族）、单游戏设置（PerGameSettingsStore，按游戏覆盖）；启动时单游戏覆盖先于全局生效。
+_Avoid_: 设置优先级、全局设置
 
-**Cover Cache (CoverImageCache / CoverThumbnailLoader)**:
-The memory + disk persistent cache for cover thumbnails and the concurrency-limited decoder; scroll-aware decoding with batched backfill avoids scrolling jank.
-_Avoid_: image loader (a generic concept, not listed here)
+**生效设置解析（EngineSettingsResolver / EffectiveEngineSettings）**:
+三级设置的统一解析入口：Resolver 从两个 Store 读取全局与单游戏覆盖，纯函数层 EffectiveEngineSettings 做白名单/内核回退等合并规则，启动与存档只消费 ResolvedEngineSettings 结果。
+_Avoid_: 设置合并、覆盖层
 
-## Saves and Data
+**引擎设置种类（EngineSettingsKind）**:
+引擎全局设置的分类（KRKR / ONS / ARTEMIS / RPG_MAKER / TYRANO / RENPY / RUFFLE / SIGLUS / FRAMEBUFFER / FVP / XSYS35 / XSYS4 / ETHORNELL / CMVS / PPSSPP / WINLATOR），各自提供该引擎族专属参数项；入口为引擎页条目弹窗底部的「全局引擎设置」长按钮，不再有独立的引擎设置入口页。
+_Avoid_: 引擎设置 Tab
 
-**Save Location Resolution**:
-The rule for resolving a game's save directory by "engine family + per-game scoped toggle + availability fallback" (GameSaveManager.resolveSaveLocation).
-_Avoid_: save path
+**运行模式（Winlator Run Mode）**:
+单游戏 Winlator 设置的三态取值：「跟随全局」（默认，直接用全局参数）、「跟随容器」（以全局为基线，清空六个图形/运行参数、固定不写回容器，容器 ID/名称先继承再覆盖）、「自定义」（按填写的参数覆盖）。模式键为 `winlator_mode`；旧记录按 1.61 的 `null / "" / 值` 语义推断后即以保存值为准（空串 = 显式不下发，与「未覆盖」不同）；切换模式保存不会删除另一种模式的已填值。参数行里的「按容器配置」是单项空值语义，不是运行模式。
+_Avoid_: 全局/容器/自定义三档（易与外观档位混淆）、跟随容器配置（参数级文案）
 
-**Save Mirror**:
-The backup capability that exports / imports a game's save directory as a zip (exportToZip / importFromZip), with file-count and size limit protection.
-_Avoid_: backup, cloud sync
+**导航样式（Nav Style）**:
+底部导航栏当前可选三档：「经典 MD」（原「默认」，Material3 导航栏；复古玻璃下为悬浮圆角玻璃条）、「液态玻璃 · 经典」（磨砂玻璃栏，三个外观主题的默认样式；无选中胶囊，图标下方显示文字，选中图标沿用经典 MD 的自下而上填充变色；栏宽与透镜档一致，圆角跟随应用圆角设置）、「液态玻璃 · 透镜」（折射透镜，需显式选择）；未手动选择时，默认、复古玻璃与白雾玻璃统一使用液态玻璃 · 经典。手动选择优先于外观风格，切换外观不覆盖选择；平板/大窗口的侧边形态见「平板侧栏」。
+_Avoid_: 底部栏外观、主题、默认导航（已更名为「经典 MD」）
 
-**Standard Save Format / Tyranor Save Format (RPG Maker MV/MZ)**:
-The two filename forms of the same save content: the standard format (JoiPlay/PC compatible, `global|config|fileN` + `.rpgsave`/`.rmmzsave`) and the Tyranor format. For MV, the Tyranor format is the engine's deterministic hash name `key_<sha256(key)>.bin` (keys such as `RPG File3`); the legacy name `RPG FileN.bin` is still read by the engine with priority but remains compatible. For MZ, the keys are pure ASCII (`fileN`), and the engine always reads/writes `fileN.bin` and **cannot** use hash names. The content of the two is byte-identical, only the filenames differ; the hash-name key space is finite, and exports can be reverse-mapped back to standard names.
-_Avoid_: save version, encoding
+**外观风格（Appearance Style）**:
+应用设置页显示为「外观主题」；视觉风格选择：「默认」、「复古玻璃」（原「玻璃」）、「白雾玻璃」三档；复古玻璃使用深色背景、半透明毛玻璃容器与 0.5dp 描边；白雾玻璃使用模糊图片底图、70% 白纱亮面条目与深色正文；两者都禁用外观模式（色调轮盘可用），以 `AppThemeColors.appearanceStyle` / `isGlass` / `isMilkGlass` 为唯一事实源。
+_Avoid_: 玻璃主题、Theme（与导航样式/外观模式混用）
 
-**Save Format Conversion (RPG Maker MV/MZ)**:
-When launching MV/MZ, if a standard-format save is detected in the **save directory effective for the engine** (with independent saves off it is `<game root>/savedata`; with it on it is the app external directory, the same source as the engine host's resolveSaveDirectory; legacy `Savedata/` is also supported), the user is asked, and then a pure rename by filename mapping (no re-encoding) to the Tyranor format is performed and written back to the effective directory; if the target already exists it is skipped without overwriting, the source file is moved into `original/` in its own directory for safekeeping, and hash saves that cannot be reverse-mapped keep their original names. Implemented only at the app layer (the engine's save read/write is unchanged).
-_Avoid_: transcoding, migration (migration refers only to changing the directory location), hardcoding `<game root>/savedata` (independent saves are on by default; hardcoding would make the feature fail under the default configuration)
+**复古玻璃（Retro Glass）**:
+外观风格第二档（持久化值仍为 `glass`，显示名由「玻璃」更名）：黑灰三档竖向渐变 + 白色顶部光晕 + 主题色对角环境光；卡片为 80% 深色玻璃膜。
+_Avoid_: 玻璃（单独出现时指本档）
 
-**Save Interop**:
-When enabled, MV/MZ saves are automatically synced bidirectionally between "the standard side `<content root>/save`" and "the Tyranor-side effective save directory" (determined by the independent-save toggle; detection/conversion/sync all share the same source): once before launch and once when returning to the foreground (after exit the process is force-killed after 500ms with no callback, so the foreground is used as the fallback, waiting for the session process to exit). The standard side supports both `save` / `Save` spellings (identical content in the same slot is treated as an equivalent copy; differing content moves the unselected copy into `deleted/`); importing an archive strips the outer folder wrapper. The newer one wins per slot, and equal mtimes require identical content hashes to skip; slots deleted on the Tyranor side move the corresponding standard-side file into `<standard side>/deleted/`; missing standard-side files are re-exported. An app-private sync manifest distinguishes "newly created" from "already deleted", and a corrupted manifest aborts the sync (no file changes at all). Controlled by global/per-game toggles, off by default.
-_Avoid_: cloud sync, backup (different from Save Mirror)
+**白雾玻璃（White Mist Glass）**:
+外观风格第三档（显示名由「乳白玻璃」更名；持久化值仍为 `milk_glass`，内部 `MILK_GLASS` / `MilkSurface` 等标识保留以避免数据迁移）：运行期 64dp 高斯模糊的图片底图 + 38% 压暗 + 主题色环境光；默认液态玻璃 · 经典底栏用亮玻璃 + 主题色轻染；页面条目为 70% 白纱（`MilkSurface`，目标 L≈211），条目正文为深色（`TextColor`），页面顶栏/空态用近白（`PageTextColor`）；弹窗/抽屉面板用同一张页面底图 + 50% 白纱（`MilkGlassPanelBackground`），条目用 `DialogItemSurface`（`MilkItemOnPanel` 45% 白纱，叠加后约 L215，与页面条目同亮度）；不使用 0.5dp 玻璃描边或投影，圆角仍取统一应用圆角。
+_Avoid_: 乳白玻璃（旧显示名）、Milk glass（旧英文名）
 
-## Input Remapping
+**工具页（Tools Page）**:
+主导航中的一级页面，集中提供 Kirikiroid2 原生界面、解包/封包、WebDAV 存档同步、输入与手柄及引擎模块管理入口，替代原“妙妙工具”侧边栏。
+_Avoid_: 妙妙工具侧边栏、工具抽屉
 
-**Input Remap**:
-The unified input component under `com.core.input` in the engine module: it normalizes input sources such as the virtual pad / physical gamepad / (later) physical keyboard into a canonical key space (keyboard segment = Android keycode, 1000 segment = mouse buttons, 2000 segment = function actions), then injects them into the target engine through one `InputSink` per host. Web-family hosts are wired via `InputRemapController.installWeb`, replacing the former `__touch_pad.js` injection implementation (that asset has been deleted).
-_Avoid_: touch gamepad (old name, referring to the retired JS implementation), virtual keyboard (use "virtual pad" when referring to the button layer's appearance)
+**平板侧栏（Side Rail）**:
+平板/大窗口（sw600dp 或宽 ≥ 840dp）下主导航的侧边形态（应用设置「平板侧边栏」开关控制，默认开）：按外观风格取该主题「经典 MD 导航栏」形态（默认与白雾玻璃 = Material3 `NavigationRail`、复古玻璃 = 悬浮玻璃柱），液态玻璃两档不适配侧栏（平板下降级为主题默认形态）；侧栏占布局宽度，`glassNavBottomInset()` 返回 0。
+_Avoid_: 导航抽屉（NavigationDrawer）、侧边栏（与抽屉混淆时）
 
-**Virtual Pad**:
-The native button layer overlaid on the game screen (`VirtualPadView`, a self-drawn View): it renders buttons and directional controls according to the current **pad profile**, and handles hit testing, pressed state, and edit mode (drag / scale / add or remove / rebind / show or hide); the editing UI is also native (`VirtualPadEditPanel`). Tapping the floating ball toggles visibility, and a long press enters editing.
-_Avoid_: soft keyboard, IME, game's built-in buttons
+**外观模式（Appearance）**:
+明/暗/跟随系统的主题选择（应用设置中显示为「深浅色切换」）；实际生效值以 `AppSettingsStore.isDarkEffective()` 为唯一事实源。复古玻璃固定深色、白雾玻璃固定浅色内容，两档都置灰该设置。
+_Avoid_: 深色模式（仅指其一）
 
-**Pad Profile**:
-A virtual pad layout (button list + directional control configuration), stored as `<filesDir>/input/profiles/<id>.json` and shared by in-game editing and the settings page; coordinates are normalized to the full viewport (0..1, with -0.1..1.1 allowed for out-of-bounds placement), and `size` is a ratio of the screen's short side. The profile directory is shared app-wide, so migration output from the old touch gamepad uses independent names `migrated-<game scope>-*` and writes a per-game override pointing to it for each game; `default` is a built-in profile (editable, not deletable).
-_Avoid_: layout file, preset (preset is a legacy implementation term)
+**应用圆角（App Corner Radius）**:
+应用设置的统一圆角数值（5–50dp，十档，默认 15dp），默认外观、复古玻璃与白雾玻璃共用；卡片、条目、弹窗与抽屉经 `theme/AppShapes.kt` 的 `AppComponentShape` / `AppComponentCornerRadius` / `AppSheetTopShape` 统一取值，不按外观风格分档。
+_Avoid_: 组件圆角、卡片圆角（仅指其一）
 
-**Gamepad Map**:
-The mapping table from the physical gamepad's 16 logical buttons (A/B/X/Y, START/SELECT, L1/R1, L2/R2, L3/R3, D-Pad four directions) and dual-stick four-direction emulation → multi-key output (may include mouse buttons), stored as `<filesDir>/input/gamepad_map.json`; stick emulation has a dead zone and hysteresis, and `autoKeep` means "hold while pressed" (pressed again to release). The host hands events to `InputRouter`, and a mapping hit is consumed.
-_Avoid_: controller, JoyKey
+**背景粒子（Floating Particles）**:
+默认外观风格页面背景上随色调轮盘换色的装饰图形，可选择「气泡上升」或「按键瀑布」。
+_Avoid_: 动态壁纸、粒子特效（仅指本背景）
 
-**Input Toggles (input_pad_enabled / input_gamepad_enabled / input_profile_id)**:
-The global/per-game setting keys for the virtual pad, gamepad mapping, and profile selection: global values are stored in `tyranor_prefs`, per-game overrides are stored in the same-named fields of the `game_overrides` blob (missing = follow global). "Three-place literal anchoring" applies only to these **three** keys (the 3 `KEY_*` in the engine's `InputConfigStore`, `EngineSettingsStore` / `PerGameSettingsStore`, `GameOverridePartitions`); the migration marker `input_legacy_migrated` is defined only on the app side. The virtual pad's global default is tiered by engine (when not explicitly set, on for MV/MZ, off for Tyrano/VN/WebOther), and gamepad mapping is on by default for all Web hosts. See `docs/input-remapping-and-gamepad-plan.md` for details.
-_Avoid_: touch settings, button toggles
+**气泡上升（Rising Bubbles）**:
+圆形光点缓慢向上漂浮的背景粒子样式，为默认选项。
 
-## Unpack / Pack
+**按键瀑布（Button Waterfall）**:
+三角、圆形、方块与十字形手柄按键图案向下飘落的背景粒子样式。
 
-**Unpack / Pack (Archive Unpack / Pack)**:
-A standalone tool page inside settings (`ui/archive`): it scans XP3 archives in the chosen directory, previews entries as a master/detail list, and unpacks everything into a folder named after the archive (same-name refused, no auto-rename); packing compresses the chosen directory into a sibling `.xp3` with the same name (0 = stored plaintext, 1–9 zlib level). The Rust implementation (`engine/rust`) and the Artemis launch chain's `ArtemisPfsUnpacker` (launch patches only, pure Kotlin) do not depend on each other.
-_Avoid_: decompress (system archive semantics), packaging
+**三语言支持**:
+zh / ja / en 三套 `strings.xml` 由工具强制键值一致（`checkHardcodedUiStrings`），禁止 Kotlin 源码硬编码 CJK 文案。
+_Avoid_: 多语言、国际化（本项目专指三语言硬一致）
 
-**Archive Scanning (ArchiveScanner)**:
-Recursive XP3 probing of the chosen directory tree on the unpack/pack page: determined only by the `.xp3` extension, with depth and count limits; real paths are preferred (safUriToPath), and if mapping fails it falls back to DocumentFile traversal.
-_Avoid_: game scanning (EngineScanner semantics)
+**引擎版本选项（Version Options）**:
+引擎设置中的版本下拉项，以 `id → 显示名` 列表（auto + 具体版本）提供；跳转页/弹窗共用同一数据源保证同序。
+_Avoid_: 版本列表（与弹窗条目混淆时）
 
-**Archive Staging**:
-The bridging mechanism used when SAF `content://` cannot map to a real path: inputs are copied into `cacheDir/archive_staging` as an intermediary, and unpack output is written back into the directory tree; stale staging is cleared once at the top of the page.
-_Avoid_: cache (generalized)
+## 封面
 
-**KSD mode-2 implicit decoding**:
-When unpacking small XP3 entries, the Kirikiri KSD mode-2 inner wrapper (`FE FE 02 FF FE` header) is also unwrapped, so the exported script text is directly editable; the krkrsdl3 engine's TextStream natively supports that wrapper, so unwrapping or not does not affect game execution, and there is no separate entry point.
-_Avoid_: KSD unpack feature (no standalone feature exists)
+**封面来源（Cover Source）**:
+获取封面的数据源（VNDB / 未萌NextMoe / Hikarinagi / Bangumi / Steam / Local / Custom），可自定义顺序与来源凭据；其中 Hikarinagi、Bangumi、未萌NextMoe 支持网页授权（Bangumi 亦支持个人访问令牌，未萌NextMoe 目录封面亦可匿名无登录读取），VNDB 支持可选个人访问令牌。
+_Avoid_: 图源、壁纸源
 
-## UI Conventions
+**封面抓取（Cover Scraping）**:
+为游戏库批量或按需获取封面元数据的流程；以既有的手工条目绑定为先，仅在绑定缺失时以刮削结果补全。
+_Avoid_: 下载封面、封面更新
 
-**Feature Navigation Item (AppNavItem)**:
-The unified "feature navigation list" component (leading icon + title/summary + right arrow); hand-assembling with Row/Column is forbidden; page item containers use NavWhite (grey base with white card), dialog items pass DialogItemSurface (contrasting with the dialog background; under glass styles it is the bright glass surface).
-_Avoid_: ListItem, hand-written item
+**手动绑定（Bind Candidate）**:
+用户从候选搜索结果中选择并确认某作品为游戏关联封面与远端条目的动作；按来源携带对应作品标识与元数据标题。
+_Avoid_: 选封面、替换
 
-**Two-Tier Font Size Rule**:
-Item body text uses bodyMedium (small size), titles use titleMedium Bold (title size); the QuickLaunchCard game name is exempt because it has a background cover and a dark scrim, and uses titleLarge Bold.
-_Avoid_: arbitrary font sizes, using title for items
+**两级封面选择（Cover Drill-down）**:
+部分来源（未萌NextMoe）一个作品有多张封面时，先在作品候选列表选中作品、再从可获取的封面中挑选的流程；不支持该流程的来源点选候选即直接绑定。
+_Avoid_: 二段选择、多图选择
 
-**Tab Bar (SlidingTabRow)**:
-The unified component for horizontal single-select tab bars: the selected item is an independent background indicator that slides linearly over 200ms when switching (with synchronized width animation); there are two forms — equal width and horizontal scrolling by content width; indicator color/corner radius/stroke are dispatched inside the component by appearance style, and callers do not pass colors. Used by the engine page's glass variants and the home "Category Warehouse" category bar; new tab/category bars must reuse it.
-_Avoid_: hand-written indicator, self-assembled TabRow
+## 游玩状态
 
-**Liquid Glass Navigation (LiquidGlassNavigationBar)**:
-A rounded navigation form that floats above the content and samples the page content for background blur (Android 12+, recording the content layer via backdrop); it is the "Liquid Glass · Classic" tier.
-_Avoid_: frosted glass, transparent navigation
+**条目绑定（Entry Binding）**:
+把游戏库条目关联到远端作品条目的持久化关系（覆盖 VNDB / Bangumi / Hikarinagi / 未萌NextMoe）。手工绑定由用户搜索后显式确认；批量刮削仅在对应来源尚无绑定时按首条命中自动补全。
+_Avoid_: 关联、绑定（泛指 UI 控件绑定）
 
-**Liquid Glass · Lens**:
-The third nav style tier (formerly "Liquid Glass Enhanced"): an **independent implementation** under `ui/common/glass/` with three-layer sampling + refractive lens + press-drag; the optical / motion parameters were tuned against real measurements in this project and frozen in `GlassBottomBarSpec`; the option is not offered below Android 13, and reading that value normalizes it to "Liquid Glass · Classic".
-_Avoid_: Liquid Glass 2.0, enhanced glass
+**游玩状态（同步）（Play Status Sync）**:
+用户手动触发的远端游玩状态操作：对 VNDB、Hikarinagi、未萌NextMoe 与 Bangumi 四源均支持远端状态回读与显式写入（Bangumi 经 `GET /v0/users/{username}/collections/{subject_id}` 单条收藏读回，404 归一「未收藏」，读 401/403 与写路径分位处理；条目绑定四源共用）。
+_Avoid_: 进度同步（各站均无逐章进度概念）、成就同步
 
-**Floating Button Nav**:
-The fourth nav style tier (`ui/common/FloatingGlassNavButton.kt`): a draggable 64dp circular Liquid Glass main button that, on tap or long press, expands navigation items along an arc toward the inner side of the screen; shared by phones and tablets (sampling on API 31+, solid fallback on lower versions). Interaction, material, and haptic details are in AGENTS.md "Corner radius exemption (floating button navigation)".
-_Avoid_: FAB navigation, floating menu
+**封面缓存（CoverImageCache / CoverThumbnailLoader）**:
+封面缩略图的内存 + 磁盘持久化缓存与受限并发解码器；滚动感知解码配合批量回填避免滑动卡顿。
+_Avoid_: 图片加载器（通用概念不入表）
 
-**Four Resident Pages**:
-The four main interface tabs (Home / Games / Engine / Settings) are kept composed, hidden pages keep their nodes with alpha=0, and switching only animates horizontal alpha to avoid rebuilding lists.
-_Avoid_: lazy page, Fragment
+## 存档与数据
 
-**Home Style**:
-The three forms of the home page: "Default" (recently opened + quick launch), "Web" (built-in WebView showing the user-selected address: preset KunGal / Yiqimeng or custom), and "Category Warehouse" (a fixed horizontally scrollable category bar below the top bar: All / Quick / Recent / each engine type; the content reuses the games page's default grid, and engine categories list only engines that actually exist in the library). Switched via app settings and effective immediately; only http/https loads inside the WebView, http(s) downloads go to the system browser, and non-http(s) links in the main frame pass only whitelisted schemes (mailto/tel etc.) to the system while the rest are intercepted; the Web home page pauses JS and page media when the home page is not in the foreground or the app goes to the background, to avoid background battery drain.
-_Avoid_: home page, start page
+**存档位置解析（Save Location）**:
+按「引擎家族 + 单游戏 scoped 开关 + 可用性回退」解析游戏存档目录的规则（GameSaveManager.resolveSaveLocation）。
+_Avoid_: 存档路径
 
-## Architecture Conventions
+**SD 强制镜像存档（Mirror-Forced Save）**:
+可移动存储上的 Kirikiri 游戏将存档固定在应用专属 SAF 镜像目录，独立存档开关不改变位置，游戏目录内手动放置的存档须经存档管理导入。此处镜像指源游戏文件的 SAF 镜像目录，与「存档镜像（Save Mirror，ZIP 导入导出）」不同，用户可见文案使用「SAF 镜像目录」限定语境。
+_Avoid_: SD 卡存档互通、自动迁移、ZIP 存档镜像
 
-**Three-Layer Architecture**:
-The fixed dependency direction `UI interaction layer (ui) → feature abstraction layer (core) → engine foundation layer (engine)`; core must not depend on Compose components, and engine must not care about app pages.
-_Avoid_: flat packages, circular dependencies
+**存档镜像（Save Mirror）**:
+将游戏存档目录导出 / 导入为 zip 的备份能力（exportToZip / importFromZip），含文件数与体积上限保护。
+_Avoid_: 备份
 
-**Unified Dialog (AppAlertDialog)**:
-The component that UI dialogs are forced to use (a Material3 AlertDialog wrapper); using the native AlertDialog directly is forbidden.
-_Avoid_: AlertDialog, Dialog
+**标准存档格式 / Tyranor 存档格式（RPG Maker MV/MZ）**:
+同一份存档内容的两种文件名形态：标准格式（JoiPlay/PC 兼容，`global|config|fileN` + `.rpgsave`/`.rmmzsave`）与 Tyranor 格式。MV 的 Tyranor 格式为引擎确定性哈希名 `key_<sha256(键)>.bin`（键如 `RPG File3`）；legacy 名 `RPG FileN.bin` 引擎读取时优先但仍兼容。MZ 的键为纯 ASCII（`fileN`），引擎固定读写 `fileN.bin`，**不能**用哈希名。二者内容字节级一致、仅文件名不同；哈希名键空间有限，导出可反解回标准名。
+_Avoid_: 编码
 
-**Launch Contract (LaunchContract)**:
-The single constant source defined by the engine module for App → engine host Intent extras keys and fixed values; the app-side EngineLauncher and the engine-side host Activity must reference it on both sides, and bare strings are forbidden.
-_Avoid_: extras convention, Intent protocol
+**存档格式转化（RPG Maker MV/MZ）**:
+启动 MV/MZ 时若在**引擎生效的存档目录**（独立存档关闭为 `<游戏根>/savedata`，开启为应用外部目录，与 engine 宿主 resolveSaveDirectory 同源；另兼容历史 `Savedata/`）检测到标准格式存档，询问用户后按文件名映射纯改名（不重编码）为 Tyranor 格式并写回生效目录；目标已存在则跳过不覆盖，源文件移入其所在目录的 `original/` 留底，不可反解的哈希存档保留原名。仅在应用层实现（engine 存档读写不变）。
+_Avoid_: 转码、迁移（迁移专指目录位置变更）、写死 `<游戏根>/savedata`（独立存档默认开启，写死会让功能在默认配置下失效）
 
-**Launch Result (LaunchResult)**:
-The unified sealed result of engine launching (Success / typed Failure); core only provides the error type, localized text is mapped by the UI layer, and exceptional scenarios use the error-code-carrying GameSaveException-style protocol.
-_Avoid_: error string, return-value text
+**存档互通（Save Interop）**:
+开启后 MV/MZ 的存档在「标准侧 `<内容根>/save`」与「Tyranor 侧生效存档目录」（独立存档开关决定，检测/转化/同步三处同源）间双向自动同步：启动前与回到前台各同步一次（退出后 500ms 强杀进程、无回调，故以前台兜底并等待会话进程退出）。标准侧兼容 `save` / `Save` 两种拼写（同槽位内容一致视为等价副本，不一致把未选中副本隔离进 `deleted/`）；导入压缩包会剥掉外层文件夹包装。逐槽位较新者胜，mtime 相同须内容哈希一致才跳过；Tyranor 侧已删除的槽位把标准侧对应文件移入 `<标准侧>/deleted/`；标准侧缺失则重新导出。以应用私有同步清单区分「新建」与「已删除」，清单损坏即中止同步（不做任何文件改动）。由全局/单游戏开关控制，默认关。
+_Avoid_: 备份（与存档镜像不同）
 
-**Page Host (AppScreenActivity / AppScreenScaffold)**:
-The unified host for secondary pages: it centralizes theme wrapping (ProvideAppLocale → TyranorNextTheme → Surface), edge-to-edge and transparent system bars, and exit transition; the page body is provided via setAppScreenContent.
-_Avoid_: BaseActivity, Scaffold shell
+**存档版本（Save Version）**:
+存档同步（WebDAV）中由条目相对路径与内容字节唯一标识的不可变存档内容。
+_Avoid_: 存档备份（指存档镜像）、快照（泛指）
 
-**FIFO Persistence Command Queue**:
-Two serial queues: MainLibraryViewModel's Channel queue serializes UI-initiated game library commands (scan/delete/search etc.), avoiding disk I/O during composition and later writes overwriting earlier ones; GameLibraryRepository.writeScope's single-threaded write queue is the only serialization guarantee point for all persistent writes (including GameLibraryFacade's synchronous facade writes).
-_Avoid_: thread pool, async race
+**待处理版本激活（Pending Save Activation）**:
+用户已明确选定、但切换结果尚未完整确认的存档版本激活；它保留该次选择的恢复状态，避免中断后丢失用户意图。
+_Avoid_: 临时版本、未完成同步
+
+**存档同步（WebDAV）**:
+通过 WebDAV 在不同设备间上传存档版本，并仅拉取每个游戏当前最新的云端版本；当前活动存档只在用户明确激活本地版本后切换。YURIS 的外置 Winlator 运行保护持续到用户在存档管理中明确确认游戏已退出，返回前台或重建主进程不作为退出证据。
+_Avoid_: 互通（专指 MV/MZ 本机两侧）、云备份、云同步（泛称）
+
+**同步身份（Sync Identity）**:
+把不同设备上的同一条游戏记录关联到同一云端目录的标识规则；存档管理页显示为「云端游戏标识」。
+_Avoid_: 游戏 ID、跨设备 ID
+
+**云端保留上限（Cloud Retention）**:
+存档同步（WebDAV）中按游戏限制云端存档版本数量的全局设置值。
+_Avoid_: 配额、全局限额
+
+## 输入重映射
+
+**输入重映射（Input Remap）**:
+engine 模块 `com.core.input` 下的统一输入组件：把虚拟按键 / 物理手柄 /（后续）物理键盘等输入源归一为 canonical 键位空间（键盘段=Android keycode、1000 段=鼠标键、2000 段=功能动作），再经每宿主一份的 `InputSink` 注入目标引擎。Web 系宿主经 `InputRemapController.installWeb` 装配，取代原 `__touch_pad.js` 注入实现（该资产已删除）。
+_Avoid_: 触屏手柄（旧称，指已下线的 JS 实现）、虚拟键盘（指按键层外观时用「虚拟按键」）
+
+**虚拟按键（Virtual Pad）**:
+叠加在游戏画面上的原生按键层（`VirtualPadView` 自绘 View）：按当前**按键方案**渲染按钮与方向控件，负责命中、按下态与编辑模式（拖拽 / 缩放 / 增删 / 改键 / 显隐），编辑 UI 亦为原生实现（`VirtualPadEditPanel`）。悬浮球点按切换显隐、长按进入编辑。
+_Avoid_: 软键盘、IME、游戏自带按键
+
+**按键方案（PadProfile）**:
+一套虚拟按键布局（按钮列表 + 方向控件配置），文件存于 `<filesDir>/input/profiles/<id>.json`，游戏内编辑与设置页共用；坐标按全视口归一化（0..1，允许 -0.1..1.1 出界摆放），`size` 取屏幕短边比例。方案目录全 App 共享，因此旧触屏手柄的迁移产物用 `migrated-<游戏作用域>-*` 独立命名并按游戏写单游戏覆盖指向它；`default` 为内置方案（可编辑、不可删除）。
+_Avoid_: 布局文件、preset（预设为旧实现术语）
+
+**手柄映射（GamepadMap）**:
+物理手柄 16 个逻辑按键（A/B/X/Y、START/SELECT、L1/R1、L2/R2、L3/R3、D-Pad 四向）与双摇杆四方向仿真 → 多键位输出（可含鼠标键）的映射表，文件存于 `<filesDir>/input/gamepad_map.json`；摇杆仿真带死区与滞回，`autoKeep` 为「按下保持」（再按一次释放）。宿主把事件交给 `InputRouter`，命中映射即消费。
+_Avoid_: 控制器、JoyKey
+
+**输入开关（input_pad_enabled / input_gamepad_enabled / input_profile_id）**:
+虚拟按键、手柄映射与方案选择的全局/单游戏设置键：全局存 `tyranor_prefs`，单游戏覆盖存 `game_overrides` blob 同名字段（缺失=跟随全局）。「三处字面量锚定」只适用于这三**个**键（engine `InputConfigStore` 的 3 个 `KEY_*`、`EngineSettingsStore` / `PerGameSettingsStore`、`GameOverridePartitions`）；迁移标记 `input_legacy_migrated` 只在 app 侧定义。虚拟按键的全局默认按引擎分档（未显式设置时 MV/MZ 开、Tyrano/VN/WebOther 关），手柄映射默认对所有 Web 宿主开启。详见 `docs/输入重映射与手柄映射方案.md`。
+_Avoid_: 触屏设置、按键开关
+
+## 拆封包
+
+**拆封包（Archive Unpack / Pack）**:
+设置内独立工具页（`ui/archive`）：扫描所选目录下的 XP3 封包、主从预览条目并整体解包到归档同名文件夹（同名拒绝，不自动改名）；封包把所选目录压成同级同名 `.xp3`（0=明文存放，1–9 zlib 等级）。Rust 实现（`engine/rust`），与 Artemis 启动链的 `ArtemisPfsUnpacker`（仅启动补丁，纯 Kotlin）互不依赖。
+_Avoid_: 解压（系统压缩包语义）、打包
+
+**归档扫描（ArchiveScanner）**:
+拆封包页对所选目录树的递归 XP3 探测：仅按扩展名 `.xp3` 判定，深度与数量有上限；真实路径优先（safUriToPath），映射失败退 DocumentFile 遍历。
+_Avoid_: 游戏扫描（EngineScanner 语义）
+
+**归档暂存（ArchiveStaging）**:
+SAF `content://` 无法映射真实路径时，把输入拷入 `cacheDir/archive_staging` 中转、解包产物再写回目录树的桥接机制；页首清一次陈旧暂存。
+_Avoid_: 缓存（泛化）
+
+**KSD mode-2 隐性解码**:
+XP3 小条目解包时顺带解开 Kirikiri KSD mode-2 内层包裹（`FE FE 02 FF FE` 头），使导出脚本文本可直接编辑；krkrsdl3 引擎 TextStream 原生支持该包裹，解开与否不影响游戏运行，无独立入口。
+_Avoid_: KSD 解包功能（不存在独立功能）
+
+## 界面规范
+
+**性能分析器**:
+可置于顶部或底部居中的单行浮层，显示输入与最终显示尺寸，滤镜简称和倍率置于按类别固定配色的占比条，默认后级缩放以相连的 Resize 灰色色卡呈现，数据按选定的预设间隔刷新；仅统计 GPU 用时，GPU 测量不可用时保留未取得数据的状态。
+_Avoid_: 调试数据（指尺寸与接入状态诊断时）、CPU 耗时冒充 GPU 耗时
+
+**功能跳转条目（AppNavItem）**:
+统一的「功能跳转列」组件（左侧图标 + 标题/摘要 + 右箭头），禁止手写 Row/Column 拼装；页面条目容器用 NavWhite（灰底白卡），弹窗内条目传 DialogItemSurface（与弹窗背景反色，玻璃风格下为亮玻璃面）。
+_Avoid_: ListItem、手写条目
+
+**二级字号规范**:
+条目正文用 bodyMedium（小字号），标题用 titleMedium Bold（标题字号）；QuickLaunchCard 游戏名因带背景封面与暗色蒙层豁免，用 titleLarge Bold。
+_Avoid_: 随意字号、item 用 title
+
+**标签栏（SlidingTabRow）**:
+横向单选标签栏的统一组件：选中项为独立背景指示器，切换时增强档弹簧蠕动、普通档 200ms 线性（宽度同步动画）；等分宽度与内容宽度横向滚动两种形态；指示器颜色/圆角/描边按外观风格由组件内部分派，调用方不传色值；弹窗内由 AppAlertDialog 提供颜色上下文，指示器取动态 DialogItemSurface，与面板形成反差。引擎页所有外观风格均使用该组件；新增标签/分类栏必须复用。
+_Avoid_: 手写指示器、自拼 TabRow
+
+**液态玻璃导航（LiquidGlassNavigationBar）**:
+悬浮于内容之上、采样页面内容做背景模糊的圆角导航形态（Android 12+，通过 backdrop 录制内容层）；为「液态玻璃 · 经典」档。
+_Avoid_: 毛玻璃、透明导航
+
+**液态玻璃 · 透镜（Liquid Glass · Lens）**:
+导航样式的第三档（旧称「液态玻璃增强」）：`ui/common/glass/` 下为本样式**独立实现**的三层采样 + 折射透镜 + 按压拖动，光学 / 运动参数经本项目实测调校后固化于 `GlassBottomBarSpec`；Android 13 以下不提供该选项，读取到该值时归一化为「液态玻璃 · 经典」。
+_Avoid_: 液态玻璃 2.0、增强玻璃
+
+**悬浮按钮导航（Floating Button Nav）**:
+以可拖动的圆形液态玻璃按钮沿圆弧展开导航项的样式，当前暂时停用。
+_Avoid_: FAB 导航、悬浮菜单
+
+**主界面常驻组合**:
+主界面可见 Tab（首页 / 游戏 / 引擎 / 工具 / 设置；关闭「显示首页」后为四页）保留组合与列表状态；增强档按方向水平弹簧切换、淡化并带轻微景深，普通档保留原补间。增强档在允许隐藏绘制的 Compose 页完全离屏后跳过正文绘制，网页首页等需保持绘制的宿主例外；切换期间未停稳的页面不接收触摸与无障碍操作。
+_Avoid_: 懒加载页、Fragment
+
+**界面动效档**:
+应用设置中的全局两档选项，默认「增强」、可即时切到「普通」；由公共具名效果负责两档行为，业务页面只提交状态和操作。
+_Avoid_: 性能模式、渲染模式
+
+**增强动效 / 普通动效**:
+增强动效提供页面侧推、弹簧反馈和浮层景深；普通动效保留各控件原有转场。遮罩交接、输入释放等正确性修复同时作用于两档。
+_Avoid_: 开启动画 / 关闭动画（普通档仍有原有动画）
+
+**提示胶囊**:
+增强档在当前可绘制窗口顶部显示的短暂提示，由 `NoticeCenter` 和 `NoticeHost` 管理排队、续显与离页；普通档及无可用宿主时使用系统提示。
+_Avoid_: 通知栏、系统通知
+
+**首页样式（Home Style）**:
+首页的两种形态：「默认」（最近打开 + 快捷启动）与「网页」（内置 WebView 展示用户所选地址：预设鲲Gal、一起萌、小鸟游或自定义）。由应用设置切换、即时生效；仅 http/https 在 WebView 内加载，http(s) 下载交系统浏览器，主框架非 http(s) 链接仅白名单 scheme（mailto/tel 等）交系统、其余拦截；Web 首页在首页不在前台或应用退后台时暂停 JS 与页面媒体，避免后台耗电。
+_Avoid_: 主页、起始页
+
+## 架构约定
+
+**三层架构**:
+`界面 UI 交互层（ui）→ 功能抽象层（core）→ 底层引擎层（engine）`的固定依赖方向；core 不得依赖 Compose 组件，engine 不得关心应用页面。
+_Avoid_: 平铺包、循环依赖
+
+**统一弹窗（AppAlertDialog）**:
+UI 弹窗强制使用的组件（Material3 AlertDialog 封装），禁止直接使用原生 AlertDialog。
+_Avoid_: AlertDialog、Dialog
+
+**启动契约（LaunchContract）**:
+engine 模块定义的 App → 引擎宿主 Intent extras 键与固定取值的唯一常量源；App 侧 EngineLauncher 与引擎侧宿主 Activity 必须双侧引用，禁止裸字符串。
+_Avoid_: extras 约定、Intent 协议
+
+**启动结果（LaunchResult）**:
+引擎启动的统一 sealed 结果（Success / 类型化 Failure）；core 只给错误类型，本地化文案由 UI 层映射，异常场景用带错误码的 GameSaveException 类协议。第三方运行时模块的 `Dispatched` 只表示 Intent 已交棒，不表示游戏已进入或可运行。
+_Avoid_: 错误字符串、返回值文案
+
+**页面宿主（AppScreenActivity / AppScreenScaffold）**:
+二级页面共用的界面宿主，统一页面的语言、主题、背景、系统栏与退出行为。
+_Avoid_: BaseActivity、Scaffold 壳
+
+**FIFO 持久化命令队列**:
+两道串行队列：MainLibraryViewModel 的 Channel 队列串行化 UI 发起的游戏库命令（扫描/删除/搜索等），避免组合期磁盘读写与后发覆盖先发；GameLibraryRepository.writeScope 单线程写队列是所有持久化写（含 GameLibraryFacade 的同步门面写）的唯一落库串行化保证点。
+_Avoid_: 线程池、异步竞态

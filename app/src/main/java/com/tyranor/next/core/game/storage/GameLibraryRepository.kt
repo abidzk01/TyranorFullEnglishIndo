@@ -1,17 +1,18 @@
 package com.tyranor.next.core.game.storage
 
-import android.app.ActivityManager
-import android.app.Application
 import android.content.Context
-import android.os.Build
-import android.os.Process
 import android.util.Log
 import androidx.room.withTransaction
+import com.tyranor.next.core.engine.EngineType
+import com.tyranor.next.core.game.model.GameSortKeys
 import com.tyranor.next.core.game.model.ScanGame
 import com.tyranor.next.core.game.scan.GameRecordCodec
 import com.tyranor.next.core.game.scan.GameRootMatcher
-import com.tyranor.next.core.settings.AppSettingsStore
+import com.tyranor.next.core.process.AppProcess
+import com.tyranor.next.core.settings.AppStorageNames
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +23,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.util.concurrent.Executors
 
 /**
@@ -38,7 +41,7 @@ object GameLibraryRepository {
 
     private const val TAG = "GameLibraryRepo"
 
-    private const val LEGACY_PREFS = "game_scanner"
+    private const val LEGACY_PREFS = AppStorageNames.GAME_SCANNER_PREFS
     private const val LEGACY_KEY_ROOTS = "scan_roots"
     private const val LEGACY_KEY_GAMES = "scan_games"
     private const val LEGACY_KEY_RECENT = "recent_games"
@@ -60,7 +63,7 @@ object GameLibraryRepository {
 
     /**
      * 写互斥：缓存门面发出的 DB 写与一致性搜索共用，保证搜索不会读到未落库的中间状态。
-     * 搜索额外先切到同一线程排队（见 [searchGamesConsistent]），mutex 只兜挂起恢复后的乱序。
+     * 搜索额外先切到同一线程排队（见 [searchGameUrisConsistent]），mutex 只兜挂起恢复后的乱序。
      */
     private val writeMutex = Mutex()
 
@@ -69,25 +72,31 @@ object GameLibraryRepository {
     @Volatile
     private var migrationDone = false
 
+    @Volatile
+    private var initJob: Job? = null
+
     /** 应用启动预热（仅主进程）：旧数据迁移检查 + 单游戏覆盖 prefs 同步 + GameLibraryFacade
      * 同步门面缓存回填，避免主线程首次读库阻塞。引擎子进程直接跳过。 */
     fun init(context: Context) {
-        if (!isMainProcess(context)) return
+        if (!AppProcess.isMain(context)) return
         val app = context.applicationContext
-        writeScope.launch {
+        initJob = writeScope.launch {
             try {
                 ensureMigrated(app)
             } catch (t: Throwable) {
+                if (t is CancellationException) throw t
                 Log.e(TAG, "Game library migration failed", t)
             }
             try {
                 GameOverridesRepository.ensureSynced(app)
             } catch (t: Throwable) {
+                if (t is CancellationException) throw t
                 Log.e(TAG, "Game overrides sync failed", t)
             }
             try {
                 GameLibraryFacade.prewarmCaches(app)
             } catch (t: Throwable) {
+                if (t is CancellationException) throw t
                 Log.e(TAG, "Game library prewarm failed", t)
             }
         }
@@ -102,8 +111,6 @@ object GameLibraryRepository {
     suspend fun ensureMigrated(context: Context) {
         if (migrationDone) return
         val prefs = context.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE)
-        val flagSet = prefs.getBoolean(KEY_MIGRATION_FLAG, false)
-        val db = GameLibraryDatabase.get(context)
         migrationMutex.withLock {
             if (migrationDone) return
             val alreadyFlagged = prefs.getBoolean(KEY_MIGRATION_FLAG, false)
@@ -121,6 +128,8 @@ object GameLibraryRepository {
                 }
                 migrationDone = true
                 Log.i(TAG, "Legacy game_scanner prefs imported into Room (repair=$repairNeeded)")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (t: Throwable) {
                 // 导入失败不阻断启动：DB 保持空/旧状态，下次启动重试；旧 prefs 未删，可整体回滚。
                 Log.e(TAG, "Legacy game library import failed", t)
@@ -152,6 +161,11 @@ object GameLibraryRepository {
     suspend fun loadGames(context: Context): List<ScanGame> = withContext(Dispatchers.IO) {
         ensureMigrated(context)
         dao(context).getAllGames().map { it.toModel() }
+    }
+
+    /** Resource reclamation must see the durable library after earlier writes have completed. */
+    internal suspend fun loadGamesAfterWrites(context: Context): List<ScanGame> = withContext(writeDispatcher) {
+        writeMutex.withLock { loadGames(context) }
     }
 
     /** 权威差量落库：变更行单行 upsert（保留首次发现时间），消失行删除（级联清理快捷启动）。 */
@@ -187,17 +201,30 @@ object GameLibraryRepository {
             }
         }
 
-    /** 封面元数据单行更新（方案阶段 2）：封面刮削不再触碰整库。返回是否有行被更新。 */
+    /** 封面/绑定元数据单行更新（方案阶段 2）：封面刮削不再触碰整库。返回是否有行被更新。 */
     suspend fun updateCover(
         context: Context,
         uri: String,
         coverUri: String?,
         coverSource: String?,
         vndbId: String?,
+        bangumiId: String?,
+        hikarinagiId: String?,
+        nextmoeId: String?,
         metadataTitle: String?,
     ): Boolean = withContext(Dispatchers.IO) {
         ensureMigrated(context)
-        dao(context).updateCover(uri, coverUri, coverSource, vndbId, metadataTitle, System.currentTimeMillis()) > 0
+        dao(context).updateCover(
+            uri,
+            coverUri,
+            coverSource,
+            vndbId,
+            bangumiId,
+            hikarinagiId,
+            nextmoeId,
+            metadataTitle,
+            System.currentTimeMillis(),
+        ) > 0
     }
 
     /** 最近打开列表：games.last_opened_at 的派生视图（方案 4.1），替代旧 recent_games 快照。 */
@@ -210,9 +237,15 @@ object GameLibraryRepository {
     }
 
     /** 从最近打开列表移除：派生视图写 0 即移除。 */
-    suspend fun clearRecent(context: Context, uri: String) = withContext(Dispatchers.IO) {
+    internal suspend fun clearRecent(context: Context, uri: String, expectedOpenedAt: Long?) = withContext(Dispatchers.IO) {
         ensureMigrated(context)
-        dao(context).updateLastOpened(uri, 0L, System.currentTimeMillis())
+        val dao = dao(context)
+        val now = System.currentTimeMillis()
+        if (expectedOpenedAt == null) {
+            dao.updateLastOpened(uri, 0L, now)
+        } else {
+            dao.clearLastOpenedIfMatches(uri, expectedOpenedAt, now)
+        }
     }
 
     /** 最近打开时间回写：仅更新 openTime 实际变化的行（方案 4.1 的 recent 派生模型）。 */
@@ -231,34 +264,34 @@ object GameLibraryRepository {
         }
     }
 
-    // ============ 搜索 / 排序（方案阶段 3） ============
+    // ============ 标题搜索 ============
 
     /**
      * 与写入串行化的一致性搜索：先切到单线程写调度器排队（严格晚于已排队的写），
-     * 再经写互斥兜住挂起恢复后的乱序；返回已按 sortMode 排序的结果。
+     * 再经写互斥兜住挂起恢复后的乱序。返回命中的 URI，展示使用当前库快照及用户排序。
      */
-    suspend fun searchGamesConsistent(context: Context, query: String, sortMode: String): List<ScanGame> =
+    suspend fun searchGameUrisConsistent(context: Context, query: String): Set<String> =
         withContext(writeDispatcher) {
-            writeMutex.withLock { searchGames(context, query, sortMode) }
-        }
-
-    suspend fun searchGames(context: Context, query: String, sortMode: String): List<ScanGame> =
-        withContext(Dispatchers.IO) {
-            ensureMigrated(context)
-            val escaped = escapeLikeQuery(query.trim())
-            if (escaped.isEmpty()) return@withContext emptyList()
-            val dao = dao(context)
-            val entities = if (sortMode == AppSettingsStore.GAME_SORT_BRACKET_TAG) {
-                dao.searchGamesSortedByBracketTag(escaped)
-            } else {
-                dao.searchGamesSortedByTitle(escaped)
+            val term = query.trim()
+            if (term.isEmpty()) return@withContext emptySet()
+            val titleKey = GameSortKeys.titleKey(term)
+            writeMutex.withLock {
+                ensureMigrated(context)
+                dao(context).searchGameUris(term, titleKey).toSet()
             }
-            entities.map { it.toModel() }
         }
 
-    /** LIKE 通配符转义，保证用户输入按字面匹配（与 UI contains 行为一致）。 */
-    private fun escapeLikeQuery(query: String): String =
-        query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    /** 从 Room 确认库中引擎，等候已排队的写入。旧库导入未完成时返回 null。 */
+    suspend fun loadEngineTypesConsistent(context: Context): Set<EngineType>? =
+        withContext(writeDispatcher) {
+            writeMutex.withLock {
+                ensureMigrated(context)
+                if (!migrationDone) return@withLock null
+                dao(context).getEngineTypes().mapTo(mutableSetOf()) { name ->
+                    runCatching { EngineType.valueOf(name) }.getOrDefault(EngineType.UNKNOWN)
+                }
+            }
+        }
 
     // ============ scan_roots ============
 
@@ -278,9 +311,13 @@ object GameLibraryRepository {
         true
     }
 
-    suspend fun removeRoot(context: Context, rootKey: String): Boolean = withContext(Dispatchers.IO) {
+    internal suspend fun removeRootAndGames(context: Context, rootKey: String, gameUris: Set<String>) = withContext(Dispatchers.IO) {
         ensureMigrated(context)
-        dao(context).deleteRoot(rootKey) > 0
+        GameLibraryDatabase.get(context).withTransaction {
+            val dao = dao(context)
+            dao.deleteRoot(rootKey)
+            gameUris.chunked(SQL_CHUNK_SIZE).forEach { dao.deleteGamesByUris(it) }
+        }
     }
 
     // ============ quick_launch ============
@@ -315,28 +352,79 @@ object GameLibraryRepository {
             mirrorJob?.cancel()
             mirrorJob = writeScope.launch {
                 delay(PREFS_MIRROR_DELAY_MS)
-                runCatching { writePrefsMirror(app) }
-                    .onFailure { Log.e(TAG, "Prefs mirror write failed", it) }
+                try {
+                    writeMutex.withLock {
+                        writePrefsMirror(app)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Prefs mirror write failed", t)
+                }
             }
         }
     }
 
+    @androidx.annotation.VisibleForTesting
+    internal fun isMigrationDoneForTest(): Boolean = migrationDone
+
+    @androidx.annotation.VisibleForTesting
+    internal fun resetMigrationForTest(done: Boolean) {
+        migrationDone = done
+    }
+
+    @androidx.annotation.VisibleForTesting
+    internal suspend fun cancelPendingMirrorAndAwaitWritesForTest() {
+        initJob?.join()
+        awaitPendingWrites()
+        synchronized(mirrorLock) {
+            mirrorJob?.cancel()
+            mirrorJob = null
+        }
+    }
+
+    @androidx.annotation.VisibleForTesting
+    internal suspend fun flushPrefsMirrorForTest(context: Context) {
+        val app = context.applicationContext
+        cancelPendingMirrorAndAwaitWritesForTest()
+        writeMutex.withLock {
+            writePrefsMirror(app)
+        }
+    }
+
+    private data class MirrorSnapshot(
+        val games: List<GameEntity>,
+        val roots: List<String>,
+        val recent: List<GameEntity>,
+        val quick: List<GameEntity>,
+    )
+
     private suspend fun writePrefsMirror(context: Context) {
-        val dao = dao(context)
-        val games = dao.getAllGames()
-        val roots = dao.getRoots().map { it.uri }
-        val recent = dao.getRecentGames(GameLibraryDao.RECENT_LIMIT)
-        val quick = dao.getQuickLaunchGames()
+        val db = GameLibraryDatabase.get(context)
+        val dao = db.gameLibraryDao()
+        val snapshot = db.withTransaction {
+            MirrorSnapshot(
+                games = dao.getAllGames(),
+                roots = dao.getRoots().map { it.uri },
+                recent = dao.getRecentGames(GameLibraryDao.RECENT_LIMIT),
+                quick = dao.getQuickLaunchGames(),
+            )
+        }
         val prefs = context.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE)
         prefs.edit()
-            .putString(LEGACY_KEY_ROOTS, roots.joinToString("\n"))
-            .putString(LEGACY_KEY_GAMES, GameRecordCodec.serialize(games.map { it.toModel() }))
-            .putString(LEGACY_KEY_RECENT, GameRecordCodec.serialize(recent.map { it.toModel() }))
-            .putString(LEGACY_KEY_QUICK, GameRecordCodec.serialize(quick.map { it.toModel() }))
+            .putString(LEGACY_KEY_ROOTS, snapshot.roots.joinToString("\n"))
+            .putString(LEGACY_KEY_GAMES, GameRecordCodec.serialize(snapshot.games.map { it.toModel() }))
+            .putString(LEGACY_KEY_RECENT, GameRecordCodec.serialize(snapshot.recent.map { it.toModel() }))
+            .putString(LEGACY_KEY_QUICK, GameRecordCodec.serialize(snapshot.quick.map { it.toModel() }))
             .apply()
     }
 
     // ============ 缓存门面接入 ============
+
+    /** 等候已经排队的写，调用方再读取缓存或写失败后恢复的 Room 快照。 */
+    internal suspend fun awaitPendingWrites() = withContext(writeDispatcher) {
+        writeMutex.withLock { }
+    }
 
     /** 持久化写失败回调：缓存先行更新后落库失败会让内存缓存与 DB（事实源）分叉，
      *  注册方（GameLibraryFacade）借此丢弃内存缓存，下次读取回源 DB 自愈。 */
@@ -364,6 +452,42 @@ object GameLibraryRepository {
     }
 
     /**
+     * Await a serialized write in the same FIFO queue as [post]. Unlike [post], the caller receives
+     * persistence errors; use this for user-visible operations that must not report success early.
+     */
+    internal suspend fun <T> writeAwaited(
+        context: Context,
+        block: suspend (Context, AwaitedWriteControl) -> T,
+    ): T {
+        val app = context.applicationContext
+        val control = AwaitedWriteControl(currentCoroutineContext()[Job])
+        val result = CompletableDeferred<T>()
+        val writeJob = writeScope.launch {
+            try {
+                control.checkBeforeCommit()
+                ensureMigrated(app)
+                val value = writeMutex.withLock {
+                    control.checkBeforeCommit()
+                    block(app, control)
+                }
+                schedulePrefsMirror(app)
+                result.complete(value)
+            } catch (ce: CancellationException) {
+                result.completeExceptionally(ce)
+                throw ce
+            } catch (t: Throwable) {
+                result.completeExceptionally(t)
+            }
+        }
+        return try {
+            result.await()
+        } catch (cancelled: CancellationException) {
+            if (control.cancelBeforeCommit()) writeJob.cancel(cancelled)
+            throw cancelled
+        }
+    }
+
+    /**
      * 缓存未命中的一次性阻塞读：与旧实现的首读 SharedPreferences XML 成本相当，
      * 由 [init] 在启动时预热把主线程首读概率降到最低。禁止在 Room 事务/写互斥内调用。
      */
@@ -381,14 +505,31 @@ object GameLibraryRepository {
 
     private fun dao(context: Context): GameLibraryDao = GameLibraryDatabase.get(context).gameLibraryDao()
 
-    /** 引擎子进程（:tyrano/:kirikiri2 等）复用同一 Application 类，本仓库只在主进程初始化。 */
-    private fun isMainProcess(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            return Application.getProcessName() == context.packageName
+}
+
+/** Cancellation gate for awaited writes: queued work is abandoned; committed work may finish atomically. */
+internal class AwaitedWriteControl(private val callerJob: Job?) {
+    private val monitor = Any()
+    private var commitStarted = false
+    private var cancelledBeforeCommit = false
+
+    fun checkBeforeCommit() = synchronized(monitor) {
+        if (cancelledBeforeCommit) throw CancellationException("awaited write cancelled before commit")
+        if (!commitStarted) callerJob?.ensureActive()
+    }
+
+    /** Must be called immediately before the first durable side effect. */
+    fun beginCommit() = synchronized(monitor) {
+        if (cancelledBeforeCommit) throw CancellationException("awaited write cancelled before commit")
+        if (!commitStarted) callerJob?.ensureActive()
+        commitStarted = true
+    }
+
+    /** Returns true when the queued writer must be cancelled. */
+    fun cancelBeforeCommit(): Boolean = synchronized(monitor) {
+        if (commitStarted) false else {
+            cancelledBeforeCommit = true
+            true
         }
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
-        return am.runningAppProcesses
-            ?.firstOrNull { it.pid == Process.myPid() }
-            ?.processName == context.packageName
     }
 }

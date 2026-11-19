@@ -1,7 +1,14 @@
 package com.tyranor.next.core.game.storage
 
+import com.tyranor.next.core.settings.GraphicsFamily
+import com.tyranor.next.core.settings.GraphicsNode
+import com.tyranor.next.core.settings.GraphicsOverride
+import com.tyranor.next.core.settings.GraphicsSettingsCodec
+import com.tyranor.next.core.settings.GraphicsSettings
+import com.tyranor.next.core.settings.ImpactoOverride
 import com.tyranor.next.core.settings.EngineSettingsStore
 import com.tyranor.next.core.settings.PerGameSettingsStore
+import com.tyranor.next.core.settings.RuffleOverride
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -20,6 +27,8 @@ class GameOverridePartitionsTest {
         .put(PerGameSettingsStore.F_VCURSOR_SCALE, "80")
         .put(PerGameSettingsStore.F_ART_VERSION, "3")
         .put(PerGameSettingsStore.F_ART_ROTATE, true)
+        .put(PerGameSettingsStore.F_ART_ANIME4K_ENABLED, true)
+        .put(PerGameSettingsStore.F_ART_ANIME4K_MODE, "soft_m")
         .put(PerGameSettingsStore.F_TY_SCOPED, false)
         .put(PerGameSettingsStore.F_RPG_MAKER_MOD_ENABLED, true)
         .put(PerGameSettingsStore.F_RPG_LEGACY_RENDERER, true)
@@ -42,6 +51,8 @@ class GameOverridePartitionsTest {
         .put(GameOverridePartitions.TOUCH_PAD_CONFIG_KEY, JSONObject().put("buttons", "a,b"))
         .put(GameOverridePartitions.TOUCH_PAD_PRESETS_KEY, JSONObject().put("preset1", "{}"))
         .put("future_engine_key", "keep-me")
+        .put(GameOverridePartitions.KEY_RUNTIME_MODULE_SETTINGS, JSONObject()
+            .put("com.tyranor.runtime.one", JSONObject().put("vsync", false)))
 
     @Test
     fun splitAssembleRoundTripIsLossless() {
@@ -55,6 +66,26 @@ class GameOverridePartitionsTest {
             // opt 返回 Any?：显式安全调用（否则 Kotlin 报「nullable receiver 上只允许 ?. / !!.」）
             assertEquals(blob.opt(key)?.toString(), GameOverridePartitions.assemble(row).opt(key)?.toString())
         }
+    }
+
+    @Test
+    fun artemisGraphicsOverridesUseArtemisPartitionAndSurviveRoundTrip() {
+        val row = GameOverridePartitions.split("/games/artemis", fullBlob(), 1L)
+        val artemis = JSONObject(row.artemisJson!!)
+        val tyrano = JSONObject(row.tyranoJson!!)
+        val assembled = GameOverridePartitions.assemble(row)
+        val keys = listOf(
+            PerGameSettingsStore.F_ART_ANIME4K_ENABLED,
+            PerGameSettingsStore.F_ART_ANIME4K_MODE,
+        )
+        for (key in keys) {
+            assertTrue(key in GameOverridePartitions.ARTEMIS_KEYS)
+            assertTrue(artemis.has(key))
+            assertTrue(!tyrano.has(key))
+            assertEquals(artemis.get(key), assembled.get(key))
+        }
+        assertEquals(true, assembled.getBoolean(PerGameSettingsStore.F_ART_ANIME4K_ENABLED))
+        assertEquals("soft_m", assembled.getString(PerGameSettingsStore.F_ART_ANIME4K_MODE))
     }
 
     @Test
@@ -89,6 +120,32 @@ class GameOverridePartitionsTest {
         assertTrue(tyranoPartition.has(PerGameSettingsStore.F_FVP_SYSTEM_FONT))
         assertTrue(tyranoPartition.has(PerGameSettingsStore.F_FVP_TEXT_HIDPI))
         assertTrue(tyranoPartition.has(PerGameSettingsStore.F_FVP_FONT))
+        assertTrue(tyranoPartition.has(GameOverridePartitions.KEY_RUNTIME_MODULE_SETTINGS))
+    }
+
+    @Test
+    fun staleFullRecordWriteKeepsLatestRuntimeModuleMapAndDoesNotResurrectClearedModules() {
+        val packageA = "com.tyranor.runtime.a"
+        val packageB = "com.tyranor.runtime.b"
+        val latest = JSONObject().put(
+            GameOverridePartitions.KEY_RUNTIME_MODULE_SETTINGS,
+            JSONObject().put(packageA, JSONObject().put("fps", 60)),
+        )
+        val staleTarget = JSONObject()
+            .put(PerGameSettingsStore.F_RENDERER, "vulkan")
+            .put(
+                GameOverridePartitions.KEY_RUNTIME_MODULE_SETTINGS,
+                JSONObject()
+                    .put(packageA, JSONObject().put("fps", 30))
+                    .put(packageB, JSONObject().put("old", true)),
+            )
+
+        GameOverridesRepository.preserveRuntimeModuleSettings(latest, staleTarget)
+
+        assertEquals("vulkan", staleTarget.getString(PerGameSettingsStore.F_RENDERER))
+        val preserved = staleTarget.getJSONObject(GameOverridePartitions.KEY_RUNTIME_MODULE_SETTINGS)
+        assertEquals(60, preserved.getJSONObject(packageA).getInt("fps"))
+        assertTrue(!preserved.has(packageB))
     }
 
     @Test
@@ -124,6 +181,83 @@ class GameOverridePartitionsTest {
         assertEquals(blob.length(), GameOverridePartitions.assemble(row).length())
     }
 
+    fun cmvsFontKeysArePartitionedIntoTyrano() {
+        assertEquals(PerGameSettingsStore.F_CMVS_FONT, GameOverridePartitions.KEY_CMVS_FONT)
+        assertTrue(GameOverridePartitions.KEY_CMVS_FONT in GameOverridePartitions.TYRANO_KEYS)
+    }
+
+    @Test
+    fun winlatorModeIsPartitionedIntoTyrano() {
+        // 运行模式没有独立分区，必须显式建模进 tyrano；
+        // 只靠「未识别键兜底」会在未来收紧分区时静默丢键，把玩家的模式选择重置成推断值。
+        assertEquals(PerGameSettingsStore.F_WINLATOR_MODE, GameOverridePartitions.KEY_WINLATOR_MODE)
+        assertEquals(PerGameSettingsStore.F_WINLATOR_CONTAINER_ID, GameOverridePartitions.KEY_WINLATOR_CONTAINER_ID)
+        assertEquals(PerGameSettingsStore.F_WINLATOR_CONTAINER_NAME, GameOverridePartitions.KEY_WINLATOR_CONTAINER_NAME)
+        assertEquals(PerGameSettingsStore.F_WINLATOR_GRAPHICS_DRIVER, GameOverridePartitions.KEY_WINLATOR_GRAPHICS_DRIVER)
+        assertEquals(PerGameSettingsStore.F_WINLATOR_DXWRAPPER, GameOverridePartitions.KEY_WINLATOR_DXWRAPPER)
+        assertEquals(PerGameSettingsStore.F_WINLATOR_SCREEN_SIZE, GameOverridePartitions.KEY_WINLATOR_SCREEN_SIZE)
+        assertEquals(PerGameSettingsStore.F_WINLATOR_LC_ALL, GameOverridePartitions.KEY_WINLATOR_LC_ALL)
+        assertEquals(PerGameSettingsStore.F_WINLATOR_TZ, GameOverridePartitions.KEY_WINLATOR_TZ)
+        assertEquals(PerGameSettingsStore.F_WINLATOR_BOX64_PRESET, GameOverridePartitions.KEY_WINLATOR_BOX64_PRESET)
+        assertEquals(PerGameSettingsStore.F_WINLATOR_SAVE, GameOverridePartitions.KEY_WINLATOR_SAVE)
+        assertTrue(
+            "全部 Winlator 覆盖键必须显式属于 tyrano 分区",
+            GameOverridePartitions.TYRANO_KEYS.containsAll(PerGameSettingsStore.CURRENT_OVERRIDE_FIELDS) &&
+                GameOverridePartitions.KEY_WINLATOR_CONTAINER_ID in GameOverridePartitions.TYRANO_KEYS &&
+                GameOverridePartitions.KEY_WINLATOR_CONTAINER_NAME in GameOverridePartitions.TYRANO_KEYS &&
+                GameOverridePartitions.KEY_WINLATOR_SAVE in GameOverridePartitions.TYRANO_KEYS,
+        )
+        assertTrue(
+            "运行模式必须显式属于 tyrano 分区",
+            GameOverridePartitions.KEY_WINLATOR_MODE in GameOverridePartitions.TYRANO_KEYS,
+        )
+
+        val blob = JSONObject().put(PerGameSettingsStore.F_WINLATOR_MODE, PerGameSettingsStore.WINLATOR_MODE_CONTAINER)
+        val row = GameOverridePartitions.split("/games/winlator", blob, 1L)
+        val tyrano = JSONObject(row.tyranoJson!!)
+        assertEquals(PerGameSettingsStore.WINLATOR_MODE_CONTAINER, tyrano.optString(PerGameSettingsStore.F_WINLATOR_MODE))
+        val restored = GameOverridePartitions.assemble(row)
+        assertEquals(PerGameSettingsStore.WINLATOR_MODE_CONTAINER, restored.optString(PerGameSettingsStore.F_WINLATOR_MODE))
+        assertEquals(blob.length(), restored.length())
+    }
+
+    @Test
+    fun winlatorOverridesRoundTripWithTypesIntact() {
+        // 十个逐游戏 Winlator 键一起走 split → assemble → toWinlatorOverride：
+        // 既覆盖「全部键都在 tyrano 分区」，也锁住 save 的 Boolean 类型不退化。
+        val blob = JSONObject().apply {
+            put(PerGameSettingsStore.F_WINLATOR_MODE, PerGameSettingsStore.WINLATOR_MODE_CUSTOM)
+            put(PerGameSettingsStore.F_WINLATOR_CONTAINER_ID, "5")
+            put(PerGameSettingsStore.F_WINLATOR_CONTAINER_NAME, "常規容器")
+            put(PerGameSettingsStore.F_WINLATOR_GRAPHICS_DRIVER, "vulkan")
+            put(PerGameSettingsStore.F_WINLATOR_DXWRAPPER, "wined3d")
+            put(PerGameSettingsStore.F_WINLATOR_SCREEN_SIZE, "1280x720")
+            put(PerGameSettingsStore.F_WINLATOR_LC_ALL, "ja_JP.UTF-8")
+            put(PerGameSettingsStore.F_WINLATOR_TZ, "Asia/Tokyo")
+            put(PerGameSettingsStore.F_WINLATOR_BOX64_PRESET, "PERFORMANCE")
+            put(PerGameSettingsStore.F_WINLATOR_SAVE, true)
+        }
+
+        val row = GameOverridePartitions.split("/games/winlator-roundtrip", blob, 1L)
+        val restored = GameOverridePartitions.assemble(row)
+
+        assertEquals(blob.length(), restored.length())
+        for (key in blob.keys()) {
+            assertEquals("键 $key", blob.get(key), restored.get(key))
+        }
+
+        val override = PerGameSettingsStore.toWinlatorOverride(restored)!!
+        assertEquals("5", override.containerId)
+        assertEquals("常規容器", override.containerName)
+        assertEquals("vulkan", override.graphicsDriver)
+        assertEquals("wined3d", override.dxwrapper)
+        assertEquals("1280x720", override.screenSize)
+        assertEquals("ja_JP.UTF-8", override.lcAll)
+        assertEquals("Asia/Tokyo", override.tz)
+        assertEquals("PERFORMANCE", override.box64Preset)
+        assertEquals(true, override.save)
+    }
+
     @Test
     fun partitionKeysMatchPerGameSettingsStoreConstants() {
         // 字面量键集与 settings 层常量的契约约束（避免漂移）
@@ -146,6 +280,8 @@ class GameOverridePartitionsTest {
         assertEquals(PerGameSettingsStore.F_MENU_HANDLER_OPA, GameOverridePartitions.KEY_MENU_HANDLER_OPA)
         assertEquals(PerGameSettingsStore.F_ART_VERSION, GameOverridePartitions.KEY_ART_VERSION)
         assertEquals(PerGameSettingsStore.F_ART_ROTATE, GameOverridePartitions.KEY_ART_ROTATE)
+        assertEquals(PerGameSettingsStore.F_ART_ANIME4K_ENABLED, GameOverridePartitions.KEY_ART_ANIME4K_ENABLED)
+        assertEquals(PerGameSettingsStore.F_ART_ANIME4K_MODE, GameOverridePartitions.KEY_ART_ANIME4K_MODE)
         assertEquals(PerGameSettingsStore.F_ART_PATCH, GameOverridePartitions.KEY_ART_PATCH)
         assertEquals(PerGameSettingsStore.F_RPG_MAKER_MOD_ENABLED, GameOverridePartitions.KEY_RPG_MAKER_MOD_ENABLED)
         assertEquals(PerGameSettingsStore.F_RPG_LEGACY_RENDERER, GameOverridePartitions.KEY_RPG_LEGACY_RENDERER)
@@ -244,6 +380,46 @@ class GameOverridePartitionsTest {
     }
 
     @Test
+    fun system4KeysArePartitionedIntoTyrano() {
+        val pairs = listOf(
+            GameOverridePartitions.KEY_XSYS4_SCOPED_SAVE_DIR to PerGameSettingsStore.F_XSYS4_SCOPED_SAVE_DIR,
+            GameOverridePartitions.KEY_XSYS4_ENCODING to PerGameSettingsStore.F_XSYS4_ENCODING,
+            GameOverridePartitions.KEY_XSYS4_FONT_GOTHIC_PATH to PerGameSettingsStore.F_XSYS4_FONT_GOTHIC_PATH,
+            GameOverridePartitions.KEY_XSYS4_FONT_MINCHO_PATH to PerGameSettingsStore.F_XSYS4_FONT_MINCHO_PATH,
+            GameOverridePartitions.KEY_XSYS4_JOYPAD to PerGameSettingsStore.F_XSYS4_JOYPAD,
+            GameOverridePartitions.KEY_XSYS4_MSGSKIP_DELAY to PerGameSettingsStore.F_XSYS4_MSGSKIP_DELAY,
+        )
+        pairs.forEach { (partitionKey, perGameKey) ->
+            assertEquals(perGameKey, partitionKey)
+            assertTrue("System4 分区缺少字段 $perGameKey", perGameKey in GameOverridePartitions.TYRANO_KEYS)
+        }
+
+        // 字面量锚定：与全局设置键、引擎侧契约的键名一致（三处同值，改名需同步）
+        assertEquals("xsys4_scoped_save_dir", EngineSettingsStore.KEY_XSYS4_SCOPED_SAVE_DIR)
+        assertEquals("xsys4_encoding", EngineSettingsStore.KEY_XSYS4_ENCODING)
+        assertEquals("xsys4_font_gothic_path", EngineSettingsStore.KEY_XSYS4_FONT_GOTHIC_PATH)
+        assertEquals("xsys4_font_mincho_path", EngineSettingsStore.KEY_XSYS4_FONT_MINCHO_PATH)
+        assertEquals("xsys4_joypad", EngineSettingsStore.KEY_XSYS4_JOYPAD)
+        assertEquals("xsys4_msgskip_delay", EngineSettingsStore.KEY_XSYS4_MSGSKIP_DELAY)
+
+        val blob = JSONObject()
+            .put(PerGameSettingsStore.F_XSYS4_SCOPED_SAVE_DIR, false)
+            .put(PerGameSettingsStore.F_XSYS4_ENCODING, "gbk")
+            .put(PerGameSettingsStore.F_XSYS4_FONT_GOTHIC_PATH, "")
+            .put(PerGameSettingsStore.F_XSYS4_FONT_MINCHO_PATH, "/data/user/0/app/files/fonts/a.ttf")
+            .put(PerGameSettingsStore.F_XSYS4_JOYPAD, "on")
+            .put(PerGameSettingsStore.F_XSYS4_MSGSKIP_DELAY, "200")
+
+        val row = GameOverridePartitions.split("/games/xsys4", blob, 1L)
+        val tyranoPartition = JSONObject(row.tyranoJson!!)
+        for (key in blob.keys()) {
+            assertTrue("System4 键 $key 未落入 tyrano 分区", tyranoPartition.has(key))
+            assertEquals(blob.opt(key)?.toString(), GameOverridePartitions.assemble(row).opt(key)?.toString())
+        }
+        assertEquals(blob.length(), GameOverridePartitions.assemble(row).length())
+    }
+
+    @Test
     fun renPyModuleKeysArePartitionedIntoRenpy() {
         val pairs = listOf(
             GameOverridePartitions.KEY_RENPY_CHEATS to PerGameSettingsStore.F_RENPY_CHEATS,
@@ -269,5 +445,161 @@ class GameOverridePartitionsTest {
             assertTrue(renpyPartition.has(perGameKey))
         }
         assertEquals(blob.length(), GameOverridePartitions.assemble(row).length())
+    }
+    @Test
+    fun ruffleKeysArePartitionedIntoTyrano() {
+        val pairs = listOf(
+            GameOverridePartitions.KEY_RUFFLE_SCREEN_TIMEOUT to PerGameSettingsStore.F_RUFFLE_SCREEN_TIMEOUT,
+            GameOverridePartitions.KEY_RUFFLE_BACKEND to PerGameSettingsStore.F_RUFFLE_BACKEND,
+            GameOverridePartitions.KEY_RUFFLE_QUALITY to PerGameSettingsStore.F_RUFFLE_QUALITY,
+            GameOverridePartitions.KEY_RUFFLE_SCALE_MODE to PerGameSettingsStore.F_RUFFLE_SCALE_MODE,
+            GameOverridePartitions.KEY_RUFFLE_LETTERBOX to PerGameSettingsStore.F_RUFFLE_LETTERBOX,
+            GameOverridePartitions.KEY_RUFFLE_LOAD_BEHAVIOR to PerGameSettingsStore.F_RUFFLE_LOAD_BEHAVIOR,
+        )
+        pairs.forEach { (partitionKey, perGameKey) ->
+            assertEquals(perGameKey, partitionKey)
+            assertTrue("Ruffle 分区缺少字段 $perGameKey", perGameKey in GameOverridePartitions.TYRANO_KEYS)
+        }
+
+        val blob = JSONObject()
+            .put(PerGameSettingsStore.F_RUFFLE_SCREEN_TIMEOUT, "30")
+            .put(PerGameSettingsStore.F_RUFFLE_BACKEND, "vulkan")
+            .put(PerGameSettingsStore.F_RUFFLE_QUALITY, "best")
+            .put(PerGameSettingsStore.F_RUFFLE_SCALE_MODE, "noborder")
+            .put(PerGameSettingsStore.F_RUFFLE_LETTERBOX, "off")
+            .put(PerGameSettingsStore.F_RUFFLE_LOAD_BEHAVIOR, "blocking")
+
+        val row = GameOverridePartitions.split("/games/ruffle", blob, 1L)
+        val tyranoPartition = JSONObject(row.tyranoJson!!)
+        for (key in blob.keys()) {
+            assertTrue("Ruffle 键 $key 未落入 tyrano 分区", tyranoPartition.has(key))
+            assertEquals(blob.opt(key)?.toString(), GameOverridePartitions.assemble(row).opt(key)?.toString())
+        }
+        assertEquals(blob.length(), GameOverridePartitions.assemble(row).length())
+        assertEquals(
+            RuffleOverride(
+                screenTimeout = "30",
+                backend = "vulkan",
+                quality = "best",
+                scaleMode = "noborder",
+                letterbox = "off",
+                loadBehavior = "blocking",
+            ),
+            PerGameSettingsStore.toRuffleOverride(GameOverridePartitions.assemble(row)),
+        )
+    }
+
+    @Test
+    fun impactoKeysArePartitionedIntoTyrano() {
+        val pairs = listOf(
+            GameOverridePartitions.KEY_IMPACTO_SWAP_CONFIRM_CANCEL to PerGameSettingsStore.F_IMPACTO_SWAP_CONFIRM_CANCEL,
+            GameOverridePartitions.KEY_IMPACTO_VSYNC to PerGameSettingsStore.F_IMPACTO_VSYNC,
+            GameOverridePartitions.KEY_IMPACTO_VIDEO_PLAYBACK to PerGameSettingsStore.F_IMPACTO_VIDEO_PLAYBACK,
+            GameOverridePartitions.KEY_IMPACTO_SUBTITLES to PerGameSettingsStore.F_IMPACTO_SUBTITLES,
+            GameOverridePartitions.KEY_IMPACTO_CLOSE_BACKLOG_AT_END to PerGameSettingsStore.F_IMPACTO_CLOSE_BACKLOG_AT_END,
+            GameOverridePartitions.KEY_IMPACTO_DELUSION_MOUSE to PerGameSettingsStore.F_IMPACTO_DELUSION_MOUSE,
+            GameOverridePartitions.KEY_IMPACTO_LOG_LEVEL to PerGameSettingsStore.F_IMPACTO_LOG_LEVEL,
+        )
+        pairs.forEach { (partitionKey, perGameKey) ->
+            assertEquals(perGameKey, partitionKey)
+            assertTrue("MAGES. 分区缺少字段 $perGameKey", perGameKey in GameOverridePartitions.TYRANO_KEYS)
+        }
+
+        val blob = JSONObject()
+            .put(PerGameSettingsStore.F_IMPACTO_SWAP_CONFIRM_CANCEL, true)
+            .put(PerGameSettingsStore.F_IMPACTO_VSYNC, false)
+            .put(PerGameSettingsStore.F_IMPACTO_VIDEO_PLAYBACK, false)
+            .put(PerGameSettingsStore.F_IMPACTO_SUBTITLES, "karaoke")
+            .put(PerGameSettingsStore.F_IMPACTO_CLOSE_BACKLOG_AT_END, false)
+            .put(PerGameSettingsStore.F_IMPACTO_DELUSION_MOUSE, false)
+            .put(PerGameSettingsStore.F_IMPACTO_LOG_LEVEL, "debug")
+
+        val row = GameOverridePartitions.split("/games/mo6tw", blob, 1L)
+        val tyranoPartition = JSONObject(row.tyranoJson!!)
+        for (key in blob.keys()) {
+            assertTrue("MAGES. 键 $key 未落入 tyrano 分区", tyranoPartition.has(key))
+            assertEquals(blob.opt(key)?.toString(), GameOverridePartitions.assemble(row).opt(key)?.toString())
+        }
+        assertEquals(blob.length(), GameOverridePartitions.assemble(row).length())
+        assertEquals(
+            ImpactoOverride(
+                swapConfirmCancel = true,
+                vsync = false,
+                videoPlayback = false,
+                subtitles = "karaoke",
+                closeBacklogAtEnd = false,
+                delusionMouse = false,
+                logLevel = "debug",
+            ),
+            PerGameSettingsStore.toImpactoOverride(GameOverridePartitions.assemble(row)),
+        )
+    }
+
+    @Test
+    fun graphicsFamilyMarkersAndOrderedListsSurviveOwnedPartitionsWithoutLosingLegacyKeys() {
+        val blob = JSONObject().put("anime4k_mode", "soft_l").put("art_graphics_monitor", true)
+            .put("future_setting", "keep")
+        for (family in GraphicsFamily.entries) {
+            blob.put(family.overrideKey, GraphicsSettingsCodec.encode(GraphicsOverride(
+                chain = listOf(GraphicsNode("deblur", false), GraphicsNode("s"), GraphicsNode("s")),
+            )))
+        }
+        val row = GameOverridePartitions.split("game", blob, 1L)
+        assertTrue(JSONObject(row.krJson!!).has(GraphicsFamily.KR.overrideKey))
+        assertTrue(JSONObject(row.artemisJson!!).has(GraphicsFamily.ARTEMIS.overrideKey))
+        assertTrue(JSONObject(row.tyranoJson!!).has(GraphicsFamily.SIGLUS.overrideKey))
+        val restored = GameOverridePartitions.assemble(row)
+        assertEquals("soft_l", restored.getString("anime4k_mode"))
+        assertTrue(restored.getBoolean("art_graphics_monitor"))
+        assertEquals("keep", restored.getString("future_setting"))
+        for (family in GraphicsFamily.entries) {
+            assertEquals(listOf(GraphicsNode("deblur", false), GraphicsNode("s"), GraphicsNode("s")),
+                GraphicsSettingsCodec.readOverride(restored, family).chain)
+            restored.put(family.overrideKey, GraphicsSettingsCodec.encode(GraphicsOverride()))
+        }
+        val inherited = GameOverridePartitions.assemble(GameOverridePartitions.split("game", restored, 2L))
+        for (family in GraphicsFamily.entries) assertEquals(GraphicsOverride(), GraphicsSettingsCodec.readOverride(inherited, family))
+        assertEquals(GraphicsFamily.KR.overrideKey, GameOverridePartitions.KEY_KR_GRAPHICS)
+        assertEquals(GraphicsFamily.ARTEMIS.overrideKey, GameOverridePartitions.KEY_ART_GRAPHICS)
+        assertEquals(GraphicsFamily.SIGLUS.overrideKey, GameOverridePartitions.KEY_SIGLUS_GRAPHICS)
+    }
+
+    @Test fun legacyKrModeHasAnOwnedPartitionAndFamilyMarkerFreezesInheritance() {
+        assertEquals(PerGameSettingsStore.F_ANIME4K_MODE, GameOverridePartitions.KEY_KR_LEGACY_ANIME4K_MODE)
+        assertTrue(PerGameSettingsStore.F_ANIME4K_MODE in GameOverridePartitions.KR_KEYS)
+        val before = JSONObject().put(PerGameSettingsStore.F_ANIME4K_MODE, "soft_l")
+            .put(PerGameSettingsStore.F_RPG_MV_VERSION, "v2")
+        val legacyRow = GameOverridePartitions.split("/games/legacy-kr", before, 1L)
+        assertEquals("soft_l", JSONObject(legacyRow.krJson!!).getString(PerGameSettingsStore.F_ANIME4K_MODE))
+        assertTrue(!JSONObject(legacyRow.tyranoJson!!).has(PerGameSettingsStore.F_ANIME4K_MODE))
+        val loaded = GameOverridePartitions.assemble(legacyRow)
+        assertEquals(GraphicsOverride(enabled = true, chain = listOf(GraphicsNode("soft_l"))),
+            GraphicsSettingsCodec.readOverride(loaded, GraphicsFamily.KR))
+
+        // Saving the family marker means absent fields now inherit; the legacy value is retained for provenance.
+        loaded.put(GraphicsFamily.KR.overrideKey, GraphicsSettingsCodec.encode(GraphicsOverride()))
+        val saved = GameOverridePartitions.assemble(GameOverridePartitions.split("/games/legacy-kr", loaded, 2L))
+        assertEquals("soft_l", saved.getString(PerGameSettingsStore.F_ANIME4K_MODE))
+        assertEquals(GraphicsOverride(), GraphicsSettingsCodec.readOverride(saved, GraphicsFamily.KR))
+        val global = GraphicsSettings(false, listOf(GraphicsNode("m")), false)
+        assertEquals(global, GraphicsSettingsCodec.resolve(global, GraphicsSettingsCodec.readOverride(saved, GraphicsFamily.KR)))
+        saved.put(PerGameSettingsStore.F_ANIME4K_MODE, "l")
+        assertEquals(global, GraphicsSettingsCodec.resolve(global, GraphicsSettingsCodec.readOverride(saved, GraphicsFamily.KR)))
+        assertEquals("v2", saved.getString(PerGameSettingsStore.F_RPG_MV_VERSION))
+    }
+
+
+    /** GL/GDI 预设经存储分区拆装后仍能还原成同一单游戏覆盖值。 */
+    @Test
+    fun winlatorRendererPresetsSurvivePartitionAndOverrideRoundTrip() {
+        for (preset in listOf("wined3d_gl", "wined3d_gdi")) {
+            val blob = JSONObject().put(PerGameSettingsStore.F_WINLATOR_DXWRAPPER, preset)
+            val row = GameOverridePartitions.split("/games/winlator", blob, 1L)
+            val restored = GameOverridePartitions.assemble(row)
+
+            assertEquals(1, restored.length())
+            assertEquals(preset, restored.getString(PerGameSettingsStore.F_WINLATOR_DXWRAPPER))
+            assertEquals(preset, PerGameSettingsStore.toWinlatorOverride(restored)?.dxwrapper)
+        }
     }
 }

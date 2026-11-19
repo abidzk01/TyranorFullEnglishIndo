@@ -9,6 +9,16 @@ import org.junit.Test
 class RenPySettingsKeysTest {
 
     @Test
+    fun legacy85VersionKeepsOriginal850WithoutChangingExplicit853() {
+        assertEquals(EngineSettingsStore.RENPY_850, EngineSettingsStore.normalizeRenpyVersion(EngineSettingsStore.RENPY_85))
+        assertEquals(EngineSettingsStore.RENPY_850, EngineSettingsStore.normalizeRenpyVersion(" 8.5 "))
+        assertEquals(EngineSettingsStore.RENPY_850, EngineSettingsStore.normalizeRenpyVersion(EngineSettingsStore.RENPY_850))
+        assertEquals(EngineSettingsStore.RENPY_853, EngineSettingsStore.normalizeRenpyVersion(EngineSettingsStore.RENPY_853))
+        assertEquals(EngineSettingsStore.RENPY_77, EngineSettingsStore.normalizeRenpyVersion(EngineSettingsStore.RENPY_77))
+        assertNull(EngineSettingsStore.normalizeRenpyVersion(null))
+    }
+
+    @Test
     fun globalAndPerGameKeysMatchLiteralContract() {
         assertEquals("renpy_cheats", EngineSettingsStore.KEY_RENPY_CHEATS)
         assertEquals("renpy_hw_video", EngineSettingsStore.KEY_RENPY_HW_VIDEO)

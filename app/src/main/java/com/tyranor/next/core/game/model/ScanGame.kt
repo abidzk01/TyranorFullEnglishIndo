@@ -1,7 +1,6 @@
 package com.tyranor.next.core.game.model
 
 import android.content.Intent
-import android.net.Uri
 import com.tyranor.next.core.engine.EngineType
 
 /** 扫描产出的游戏候选。 */
@@ -13,14 +12,22 @@ data class ScanGame(
     val coverUri: String? = null,
     val coverSource: String? = null,
     val vndbId: String? = null,
+    /** 绑定的 Bangumi 条目 id（subject id，十进制字符串）；null 表示未绑定。 */
+    val bangumiId: String? = null,
+    /** 绑定的 Hikarinagi Galgame 条目 id；null 表示未绑定。 */
+    val hikarinagiId: String? = null,
+    /** 绑定的未萌 NextMoe 作品 id（catalog work id，十进制字符串）；null 表示未绑定。 */
+    val nextmoeId: String? = null,
     val metadataTitle: String? = null,
     /** 外置 APK 模块内部别名（如 internal.rpgmxp），用于保留同一引擎下的子运行时；Ren'Py 由单游戏版本设置决定，不写该字段。 */
     val externalModuleAlias: String? = null,
     /** 扫描阶段探测到的 Ren'Py 版本建议（EngineSettingsStore.RENPY_*）；null 表示未知或非 Ren'Py。 */
     val detectedRenpyVersion: String? = null,
+    /** 第三方 APK 运行时模块包名。模块不可用时保留最后已知包名，供重扫从 UNKNOWN 或内置 SystemNNN 回退恢复。 */
+    val runtimeModulePackage: String? = null,
     /** 用户通过“启动文件”手动指定的启动入口文件名（相对游戏目录）；null 表示自动。 */
     val launchFile: String? = null,
-    /** 最近一次打开时间戳（毫秒），仅最近打开列表展示使用；0 表示未知。 */
+    /** 最近一次打开时间戳（毫秒），用于最近打开、游玩状态筛选与最近游玩排序；0 表示无记录。 */
     val openTime: Long = 0,
 )
 
@@ -33,9 +40,13 @@ object ScanGameIntents {
     private const val EXTRA_COVER_URI = "extra_cover_uri"
     private const val EXTRA_COVER_SOURCE = "extra_cover_source"
     private const val EXTRA_VNDB_ID = "extra_vndb_id"
+    private const val EXTRA_BANGUMI_ID = "extra_bangumi_id"
+    private const val EXTRA_HIKARINAGI_ID = "extra_hikarinagi_id"
+    private const val EXTRA_NEXTMOE_ID = "extra_nextmoe_id"
     private const val EXTRA_METADATA_TITLE = "extra_metadata_title"
     private const val EXTRA_EXTERNAL_MODULE_ALIAS = "extra_external_module_alias"
     private const val EXTRA_DETECTED_RENPY_VERSION = "extra_detected_renpy_version"
+    private const val EXTRA_RUNTIME_MODULE_PACKAGE = "extra_runtime_module_package"
 
     fun putGame(intent: Intent, game: ScanGame): Intent = intent.apply {
         putExtra(EXTRA_TITLE, game.title)
@@ -45,9 +56,13 @@ object ScanGameIntents {
         game.coverUri?.let { putExtra(EXTRA_COVER_URI, it) }
         game.coverSource?.let { putExtra(EXTRA_COVER_SOURCE, it) }
         game.vndbId?.let { putExtra(EXTRA_VNDB_ID, it) }
+        game.bangumiId?.let { putExtra(EXTRA_BANGUMI_ID, it) }
+        game.hikarinagiId?.let { putExtra(EXTRA_HIKARINAGI_ID, it) }
+        game.nextmoeId?.let { putExtra(EXTRA_NEXTMOE_ID, it) }
         game.metadataTitle?.let { putExtra(EXTRA_METADATA_TITLE, it) }
         game.externalModuleAlias?.let { putExtra(EXTRA_EXTERNAL_MODULE_ALIAS, it) }
         game.detectedRenpyVersion?.let { putExtra(EXTRA_DETECTED_RENPY_VERSION, it) }
+        game.runtimeModulePackage?.let { putExtra(EXTRA_RUNTIME_MODULE_PACKAGE, it) }
     }
 
     fun getGame(intent: Intent): ScanGame? {
@@ -64,9 +79,13 @@ object ScanGameIntents {
             coverUri = intent.getStringExtra(EXTRA_COVER_URI),
             coverSource = intent.getStringExtra(EXTRA_COVER_SOURCE),
             vndbId = intent.getStringExtra(EXTRA_VNDB_ID),
+            bangumiId = intent.getStringExtra(EXTRA_BANGUMI_ID),
+            hikarinagiId = intent.getStringExtra(EXTRA_HIKARINAGI_ID),
+            nextmoeId = intent.getStringExtra(EXTRA_NEXTMOE_ID),
             metadataTitle = intent.getStringExtra(EXTRA_METADATA_TITLE),
             externalModuleAlias = intent.getStringExtra(EXTRA_EXTERNAL_MODULE_ALIAS),
             detectedRenpyVersion = intent.getStringExtra(EXTRA_DETECTED_RENPY_VERSION),
+            runtimeModulePackage = intent.getStringExtra(EXTRA_RUNTIME_MODULE_PACKAGE),
         )
     }
 }

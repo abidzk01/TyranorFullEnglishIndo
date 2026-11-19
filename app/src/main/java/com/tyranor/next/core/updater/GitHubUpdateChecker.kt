@@ -5,11 +5,17 @@ import android.content.pm.PackageInfo
 import android.os.Build
 import com.tyranor.next.R
 import com.tyranor.next.core.i18n.AppLocaleController
+import com.tyranor.next.core.net.MAX_JSON_CHARS
+import com.tyranor.next.core.net.readTextCapped
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.charset.StandardCharsets
 
 object GitHubUpdateChecker {
     private const val RELEASES_API =
@@ -17,6 +23,33 @@ object GitHubUpdateChecker {
 
     /** 更新弹窗列表最多展示的版本数。 */
     private const val MAX_CANDIDATES = 3
+
+    private const val PREFS_NAME = "update_checker"
+    private const val KEY_AVAILABLE_VERSION = "available_version"
+
+    private val _hasUpdate = MutableStateFlow(false)
+
+    /**
+     * 是否存在未安装的新版本（供 UI 展示红点）。
+     * 成功检查后更新并持久化，检查失败时保持原值；重启后由 [restoreState] 恢复，直到检查为最新版本。
+     */
+    val hasUpdate: StateFlow<Boolean> = _hasUpdate.asStateFlow()
+
+    /** 应用启动时恢复上次检查结果；已安装到该版本或更高版本时视为无更新。 */
+    fun restoreState(context: Context) {
+        val app = context.applicationContext
+        val saved = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_AVAILABLE_VERSION, null)
+        val currentVersion = runCatching { app.packageInfoCompat(app.packageName).versionName }.getOrNull() ?: "0"
+        _hasUpdate.value = !saved.isNullOrBlank() && compareVersions(saved, currentVersion) > 0
+    }
+
+    private fun persistAvailableVersion(context: Context, version: String?) {
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .apply { if (version == null) remove(KEY_AVAILABLE_VERSION) else putString(KEY_AVAILABLE_VERSION, version) }
+            .apply()
+    }
 
     suspend fun check(context: Context): UpdateCheckResult = withContext(Dispatchers.IO) {
         runCatching {
@@ -75,8 +108,12 @@ object GitHubUpdateChecker {
             }
 
             if (newerStable.isEmpty() && newerPre.isEmpty()) {
+                persistAvailableVersion(app, null)
+                _hasUpdate.value = false
                 UpdateCheckResult.UpToDate(currentVersion)
             } else {
+                persistAvailableVersion(app, versionFromRelease(newerStable.firstOrNull() ?: newerPre.first()))
+                _hasUpdate.value = true
                 UpdateCheckResult.UpdateAvailable(
                     currentVersion = currentVersion,
                     // 通知等单版本场景用 primary：最新的新正式版，无则最新的新 prerelease
@@ -85,6 +122,7 @@ object GitHubUpdateChecker {
                 )
             }
         }.getOrElse { error ->
+            if (error is kotlinx.coroutines.CancellationException) throw error
             val localizedContext = AppLocaleController.wrap(context)
             UpdateCheckResult.Failed(error.message ?: localizedContext.getString(R.string.update_network_failed))
         }
@@ -108,18 +146,15 @@ object GitHubUpdateChecker {
             setRequestProperty("User-Agent", "TyranorNext")
         }
         return try {
-            val stream = if (connection.responseCode in 200..299) {
-                connection.inputStream
-            } else {
-                connection.errorStream ?: connection.inputStream
+            val status = connection.responseCode
+            if (status !in 200..299) {
+                runCatching { connection.errorStream?.close() }
+                error(AppLocaleController.wrap(context).getString(R.string.update_github_request_failed, status))
             }
-            stream.bufferedReader().use { reader ->
-                val body = reader.readText()
-                if (connection.responseCode !in 200..299) {
-                    error(AppLocaleController.wrap(context).getString(R.string.update_github_request_failed, connection.responseCode))
-                }
-                JSONArray(body)
+            val body = connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { reader ->
+                reader.readTextCapped(MAX_JSON_CHARS)
             }
+            JSONArray(body)
         } finally {
             connection.disconnect()
         }

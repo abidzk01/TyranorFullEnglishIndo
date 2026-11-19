@@ -1,8 +1,10 @@
 package com.tyranor.next.core.settings
 
 import android.content.Context
+import com.tyranor.next.core.engine.EngineType
 import com.tyranor.next.core.game.model.GamePathUtils
 import com.tyranor.next.core.game.model.ScanGame
+import com.tyranor.runtime.systemnnn.SystemNnnHost
 
 /**
  * 三级设置解析器（P0-3）：读取应用级全局值与单游戏覆盖，交给 [EffectiveEngineSettings]
@@ -12,6 +14,38 @@ import com.tyranor.next.core.game.model.ScanGame
  * 新增设置项时只需在 [ResolvedEngineSettings] 与 [resolve] 里各加一处。
  */
 object EngineSettingsResolver {
+
+    /**
+     * 纯函数：全局 Winlator 设置 + 逐游戏覆盖 JSON → 生效设置。
+     *
+     * 三种模式的行为：
+     * - 跟随全局：直接返回全局（等价于 `mergeWinlator(global, null)`）；
+     * - 跟随容器：以 [WinlatorOverride.containerBaseline] 为覆盖，清空全部参数并 `save=false`，
+     *   容器 ID / 名称先继承全局再由逐游戏值覆盖；
+     * - 自定义：按覆盖值合并。
+     *
+     * 抽成纯函数是为了让 CONTAINER 的 forced-empty 组装与 `save=false` 有直接的 JVM 断言，
+     * 而不是只能通过 UI 或启动链间接验证。
+     */
+    internal fun resolveWinlatorSettings(
+        global: EngineSettingsStore.Winlator,
+        overrideJson: org.json.JSONObject?,
+    ): EngineSettingsStore.Winlator {
+        val override = PerGameSettingsStore.toWinlatorOverride(overrideJson)
+        return when (PerGameSettingsStore.inferWinlatorMode(overrideJson ?: org.json.JSONObject())) {
+            PerGameSettingsStore.WINLATOR_MODE_CONTAINER ->
+                EffectiveEngineSettings.mergeWinlator(
+                    global,
+                    WinlatorOverride.containerBaseline(override?.containerId, override?.containerName),
+                )
+
+            PerGameSettingsStore.WINLATOR_MODE_CUSTOM ->
+                EffectiveEngineSettings.mergeWinlator(global, override)
+
+            else -> EffectiveEngineSettings.mergeWinlator(global, null)
+        }
+    }
+
 
     /** 解析单个游戏的生效引擎设置；[gameDir] 用于可移动存储的内核回退判定，未知传 null。 */
     fun resolve(context: Context, game: ScanGame, gameDir: String?): ResolvedEngineSettings {
@@ -24,10 +58,23 @@ object EngineSettingsResolver {
         val removableStorage = gameDir?.let { GamePathUtils.isRemovableStoragePath(it) } == true
         val onsGlobal = EngineSettingsStore.loadOns(app)
         val onsOverride = PerGameSettingsStore.toOnsOverride(override.optJSONObject(PerGameSettingsStore.ONS_KEY))
+        val systemNnn = game.engine == EngineType.SYSTEMNNN
 
         return ResolvedEngineSettings(
             ons = EffectiveEngineSettings.mergeOns(onsGlobal, onsOverride),
-            krEngineVersion = EffectiveEngineSettings.resolve(
+            krGraphics = GraphicsSettingsCodec.resolve(
+                EngineSettingsStore.getGraphicsSettings(app, GraphicsFamily.KR),
+                GraphicsSettingsCodec.readOverride(override, GraphicsFamily.KR),
+            ),
+            artGraphics = GraphicsSettingsCodec.resolve(
+                EngineSettingsStore.getGraphicsSettings(app, GraphicsFamily.ARTEMIS),
+                GraphicsSettingsCodec.readOverride(override, GraphicsFamily.ARTEMIS),
+            ),
+            siglusGraphics = GraphicsSettingsCodec.resolve(
+                EngineSettingsStore.getGraphicsSettings(app, GraphicsFamily.SIGLUS),
+                GraphicsSettingsCodec.readOverride(override, GraphicsFamily.SIGLUS),
+            ),
+            krEngineVersion = EffectiveEngineSettings.resolveKrVersion(
                 str(PerGameSettingsStore.F_ENGINE_VERSION),
                 EngineSettingsStore.getKrEngineVersion(app),
             ),
@@ -58,21 +105,12 @@ object EngineSettingsResolver {
                 bool(PerGameSettingsStore.F_SKIP_STARTUP_DIALOGS),
                 EngineSettingsStore.isKrSkipStartupDialogs(app),
             ),
-            krAnime4kMode = EffectiveEngineSettings.resolveAllowed(
-                str(PerGameSettingsStore.F_ANIME4K_MODE),
-                EngineSettingsStore.getKrAnime4kMode(app),
-                EngineSettingsStore.ANIME4K_MODES,
-                EngineSettingsStore.ANIME4K_OFF,
-            ),
             krRenderer = EffectiveEngineSettings.resolve(
                 str(PerGameSettingsStore.F_RENDERER),
                 EngineSettingsStore.getKrRenderer(app),
             ),
-            artVersion = EffectiveEngineSettings.resolveAllowed(
-                str(PerGameSettingsStore.F_ART_VERSION),
-                EngineSettingsStore.getArtEngineVersion(app),
-                EngineSettingsStore.ART_VERSIONS,
-                EngineSettingsStore.ART_ENGINE_AUTO,
+            artVersion = EffectiveEngineSettings.resolveArtVersion(
+                str(PerGameSettingsStore.F_ART_VERSION), EngineSettingsStore.getArtEngineVersion(app),
             ),
             artKernel = EffectiveEngineSettings.resolveAllowed(
                 str(PerGameSettingsStore.F_ART_KERNEL),
@@ -80,10 +118,9 @@ object EngineSettingsResolver {
                 EngineSettingsStore.ART_KERNELS,
                 EngineSettingsStore.ART_KERNEL_OFFICIAL,
             ),
-            artRotate = EffectiveEngineSettings.resolveBool(
-                bool(PerGameSettingsStore.F_ART_ROTATE),
-                EngineSettingsStore.isArtRotateScreen(app),
-            ),
+            // Retained only so the resolved settings model stays source-compatible.
+            // Legacy global/per-game values are preserved in storage but no longer affect launches.
+            artRotate = false,
             artAutoPatch = EffectiveEngineSettings.resolveAllowed(
                 str(PerGameSettingsStore.F_ART_PATCH),
                 EngineSettingsStore.getArtAutoPatch(app),
@@ -123,6 +160,10 @@ object EngineSettingsResolver {
             webShellPort = EffectiveEngineSettings.resolveWebShellPort(
                 str(PerGameSettingsStore.F_WEB_SHELL_PORT),
                 EngineSettingsStore.getWebShellPort(app),
+            ),
+            webExternalNetwork = EffectiveEngineSettings.resolveBool(
+                bool(PerGameSettingsStore.F_TY_EXTERNAL),
+                EngineSettingsStore.isTyranoExternalNetwork(app),
             ),
             webScopedSaveDir = EffectiveEngineSettings.resolveBool(
                 bool(PerGameSettingsStore.F_TY_SCOPED),
@@ -181,6 +222,36 @@ object EngineSettingsResolver {
                 EngineSettingsStore.FVP_NLS_VALUES,
                 EngineSettingsStore.FVP_NLS_SJIS,
             ),
+            ethornellNls = EffectiveEngineSettings.resolveEthornellNls(
+                str(PerGameSettingsStore.F_ETHORNELL_NLS),
+                EngineSettingsStore.getEthornellNls(app),
+            ),
+            ethornellFont = EffectiveEngineSettings.resolve(
+                str(PerGameSettingsStore.F_ETHORNELL_FONT),
+                EngineSettingsStore.getEthornellFont(app),
+            ),
+            cmvsFont = EffectiveEngineSettings.resolve(
+                str(PerGameSettingsStore.F_CMVS_FONT),
+                EngineSettingsStore.getCmvsFont(app),
+            ),
+            cmvsFontFace = EngineSettingsStore.getCmvsFontFace(app),
+            systemNnnFullscreen = if (systemNnn) {
+                (override.opt(PerGameSettingsStore.F_SYSTEMNNN_FULLSCREEN) as? Boolean)
+                    ?: EngineSettingsStore.isSystemNnnFullscreen(app)
+            } else SystemNnnHost.DEFAULT_FULLSCREEN,
+            systemNnnReadingSize = if (systemNnn) {
+                str(PerGameSettingsStore.F_SYSTEMNNN_READING_SIZE)?.toIntOrNull()
+                    ?.takeIf { it in EngineSettingsStore.SYSTEMNNN_READING_SIZES }
+                    ?: EngineSettingsStore.getSystemNnnReadingSize(app)
+            } else SystemNnnHost.DEFAULT_READING_SIZE,
+            systemNnnExeAnalysis = if (systemNnn) {
+                (override.opt(PerGameSettingsStore.F_SYSTEMNNN_EXE_ANALYSIS) as? Boolean)
+                    ?: EngineSettingsStore.isSystemNnnExeAnalysisEnabled(app)
+            } else SystemNnnHost.DEFAULT_EXE_ANALYSIS,
+            systemNnnDebugMode = if (systemNnn) {
+                (override.opt(PerGameSettingsStore.F_SYSTEMNNN_DEBUG_MODE) as? Boolean)
+                    ?: EngineSettingsStore.isSystemNnnDebugMode(app)
+            } else SystemNnnHost.DEFAULT_DEBUG_MODE,
             fvpSystemFont = EffectiveEngineSettings.resolveBool(
                 bool(PerGameSettingsStore.F_FVP_SYSTEM_FONT),
                 EngineSettingsStore.isFvpSystemFont(app),
@@ -211,6 +282,34 @@ object EngineSettingsResolver {
                 bool(PerGameSettingsStore.F_XSYS35_MUTE_UNFOCUS),
                 EngineSettingsStore.isXs35MuteUnfocus(app),
             ),
+            xs4ScopedSaveDir = EffectiveEngineSettings.resolveBool(
+                bool(PerGameSettingsStore.F_XSYS4_SCOPED_SAVE_DIR),
+                EngineSettingsStore.isXs4ScopedSaveDir(app),
+            ),
+            xs4Encoding = EffectiveEngineSettings.resolveAllowed(
+                str(PerGameSettingsStore.F_XSYS4_ENCODING),
+                EngineSettingsStore.getXs4Encoding(app),
+                EngineSettingsStore.XSYS4_ENCODING_VALUES,
+                EngineSettingsStore.XSYS4_ENCODING_SJIS,
+            ),
+            xs4FontGothicPath = EffectiveEngineSettings.resolve(
+                str(PerGameSettingsStore.F_XSYS4_FONT_GOTHIC_PATH),
+                EngineSettingsStore.getXs4FontGothicPath(app),
+            ),
+            xs4FontMinchoPath = EffectiveEngineSettings.resolve(
+                str(PerGameSettingsStore.F_XSYS4_FONT_MINCHO_PATH),
+                EngineSettingsStore.getXs4FontMinchoPath(app),
+            ),
+            xs4Joypad = EffectiveEngineSettings.resolveAllowed(
+                str(PerGameSettingsStore.F_XSYS4_JOYPAD),
+                EngineSettingsStore.getXs4Joypad(app),
+                EngineSettingsStore.XSYS4_JOYPAD_VALUES,
+                EngineSettingsStore.XSYS4_JOYPAD_AUTO,
+            ),
+            xs4MsgskipDelay = EffectiveEngineSettings.resolveXs4MsgskipDelay(
+                str(PerGameSettingsStore.F_XSYS4_MSGSKIP_DELAY),
+                EngineSettingsStore.getXs4MsgskipDelay(app),
+            ),
             rpg = EffectiveEngineSettings.mergeRpgMaker(
                 EngineSettingsStore.loadRpgMaker(app),
                 PerGameSettingsStore.toRpgMakerOverride(override),
@@ -219,10 +318,19 @@ object EngineSettingsResolver {
                 EngineSettingsStore.loadRenPy(app),
                 PerGameSettingsStore.toRenPyOverride(override),
             ),
-            winlator = EffectiveEngineSettings.mergeWinlator(
-                EngineSettingsStore.loadWinlator(app),
-                PerGameSettingsStore.toWinlatorOverride(override),
+            ruffle = EffectiveEngineSettings.mergeRuffle(
+                EngineSettingsStore.loadRuffle(app),
+                PerGameSettingsStore.toRuffleOverride(override),
             ),
+            impacto = EffectiveEngineSettings.mergeImpacto(
+                EngineSettingsStore.loadImpacto(app),
+                PerGameSettingsStore.toImpactoOverride(override),
+            ),
+            winlator = run {
+                val global = EngineSettingsStore.loadWinlator(app)
+                // 模式推断复用本函数已加载的覆盖 JSON，避免 getWinlatorMode 再走一次阻塞读。
+                resolveWinlatorSettings(global, override)
+            },
         )
     }
 
@@ -241,6 +349,9 @@ object EngineSettingsResolver {
 /** 三级合并后的启动期生效设置（纯数据）。 */
 data class ResolvedEngineSettings(
     val ons: EngineSettingsStore.Ons,
+    val krGraphics: GraphicsSettings = GraphicsSettings.defaults(GraphicsFamily.KR),
+    val artGraphics: GraphicsSettings = GraphicsSettings.defaults(GraphicsFamily.ARTEMIS),
+    val siglusGraphics: GraphicsSettings = GraphicsSettings.defaults(GraphicsFamily.SIGLUS),
     val krEngineVersion: String,
     val krKernel: String,
     val krScopedSaveDir: Boolean,
@@ -248,11 +359,11 @@ data class ResolvedEngineSettings(
     val krForceDefaultFont: Boolean,
     val krPatchOverlayMode: String,
     val krSkipStartupDialogs: Boolean,
-    val krAnime4kMode: String,
     val krRenderer: String,
     val artVersion: String,
     /** Artemis 内核生效值（官方多 revision / 自研 clean-room）。 */
     val artKernel: String,
+    /** Compatibility field; always false because built-in player orientation is fixed landscape. */
     val artRotate: Boolean,
     val artAutoPatch: String,
     val artResolution: String,
@@ -263,6 +374,7 @@ data class ResolvedEngineSettings(
     /** Web 壳（Tyrano / WebOther / VN）本地 HTTP 服务端口（固定端口保证 WebView 存档域稳定）。 */
     val webShellPort: Int,
     val webScopedSaveDir: Boolean,
+    val webExternalNetwork: Boolean,
     val rpgMakerModEnabled: Boolean,
     val rpgLegacyRenderer: Boolean,
     /** MV/MZ 存档互通生效值（单游戏覆盖 > 全局）。合并值不区分引擎，消费方须以引擎类型门控。 */
@@ -278,6 +390,14 @@ data class ResolvedEngineSettings(
     val fbNls: String,
     /** FVP 生效文本编码（sjis/gbk/utf8；创建引擎时固定，改动需重启本局）。 */
     val fvpNls: String,
+    /** Graphics text only, sjis/gbk; resource names and UI locale are independent. */
+    val ethornellNls: String,
+    /** Empty = engine fallback; nonempty paths must pass the private-font launch preflight. */
+    val ethornellFont: String,
+    /** CMVS 字体绝对路径（空 = 未选择，启动预检失败）。 */
+    val cmvsFont: String,
+    /** CMVS 字体集合索引。 */
+    val cmvsFontFace: Int,
     /** FVP 生效系统字体回退开关。 */
     val fvpSystemFont: Boolean,
     /** FVP 生效文本高分辨率渲染开关。 */
@@ -292,10 +412,30 @@ data class ResolvedEngineSettings(
     val xs35IntegerScale: Boolean,
     /** System35 生效失焦静音开关（`-mute_on_unfocus`）。 */
     val xs35MuteUnfocus: Boolean,
+    /** System4 生效「独立存档」开关（默认开；目录 = `<外部存储>/save/<safeSaveName>`，关闭 = 游戏根 `SaveFolder`）。 */
+    val xs4ScopedSaveDir: Boolean,
+    /** System4 生效文本编码（sjis / gbk；映射为 `--encoding`）。 */
+    val xs4Encoding: String,
+    /** System4 生效自定义 gothic 字体绝对路径（空 = 用 engine 侧内置映射；非空仍需启动前校验存在）。 */
+    val xs4FontGothicPath: String,
+    /** System4 生效自定义 mincho 字体绝对路径（语义同 [xs4FontGothicPath]）。 */
+    val xs4FontMinchoPath: String,
+    /** System4 生效手柄（auto 不下发；on / off 映射为 `--joypad`）。 */
+    val xs4Joypad: String,
+    /** System4 生效跳字延迟毫秒（0 = 引擎默认，不下发）。 */
+    val xs4MsgskipDelay: Int,
     /** RPG Maker RGSS 外置模块生效配置（三级合并结果，启动时经 settings extra 下发）。 */
     val rpg: EngineSettingsStore.RpgMaker,
     /** Ren'Py 外置模块生效配置（三级合并结果，启动时经 settings extra 下发）。 */
     val renpy: EngineSettingsStore.RenPy,
+    /** Ruffle 外置模块生效配置（三级合并结果，启动时经 settings extra 下发）。 */
+    val ruffle: EngineSettingsStore.Ruffle,
+    /** MAGES.（impacto）宿主生效配置（三级合并结果，启动时经 settings extra 下发）。 */
+    val impacto: EngineSettingsStore.Impacto,
     /** Winlator 外置启动下发参数（三级合并结果；跳转 YU-RIS / CatSystem2 / PC 时消费）。 */
     val winlator: EngineSettingsStore.Winlator,
+    val systemNnnFullscreen: Boolean = SystemNnnHost.DEFAULT_FULLSCREEN,
+    val systemNnnReadingSize: Int = SystemNnnHost.DEFAULT_READING_SIZE,
+    val systemNnnExeAnalysis: Boolean = SystemNnnHost.DEFAULT_EXE_ANALYSIS,
+    val systemNnnDebugMode: Boolean = SystemNnnHost.DEFAULT_DEBUG_MODE,
 )

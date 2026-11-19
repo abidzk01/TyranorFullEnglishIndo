@@ -1,0 +1,353 @@
+package com.tyranor.runtime.systemnnn;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import com.core.engine.LaunchContract;
+import com.core.nativeplugin.NativeRuntimePack;
+import java.io.Closeable;
+import java.io.DataInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.RandomAccessFile;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/** Host entry point for the built-in Tyranor-Next engine. */
+public final class SystemNnnHost {
+    public static final boolean DEFAULT_FULLSCREEN = true;
+    public static final int DEFAULT_READING_SIZE = 85;
+    public static final boolean DEFAULT_EXE_ANALYSIS = true;
+    public static final boolean DEFAULT_DEBUG_MODE = false;
+    public static final List<Integer> READING_SIZES = Collections.unmodifiableList(Arrays.asList(60, 85, 100, 115));
+    static final String EXTRA_FULLSCREEN = "systemnnn.fullscreen";
+    static final String EXTRA_READING_SIZE = "systemnnn.reading_size";
+    static final String EXTRA_EXE_ANALYSIS = "systemnnn.exe_analysis";
+    static final String EXTRA_DEBUG_MODE = "systemnnn.debug_mode";
+    public static final String SAVE_MIGRATION_DIRECTORY = GameSavePaths.PREFIX + ".migrate";
+    public static final String SAVE_RESTORE_DIRECTORY = "tyn-restore";
+    public static final String SAVE_SLOT_PRESENTATION_FILE = GameSavePaths.PREFIX + SaveSlots.SLOT_UI;
+    public static final String SAVE_ZIP_STAGING_PREFIX = SystemNnnSaveValidationService.ZIP_PREFIX;
+    public static final String SAVE_VALIDATOR_PROCESS = ":systemnnn_validator";
+    // Player task writers live in :systemnnn. The launcher opens records only to check liveness.
+    private static final Map<File,RandomAccessFile> PLAYER_TASKS = new HashMap<>();
+    private static boolean taskRecordsSwept;
+    private static final Pattern CHART_NODE=Pattern.compile(
+        "(emberfall\\.chart|mushiex)/chart([1-9][0-9]?)/slot(0|[1-9][0-9]{0,5})\\.dat",Pattern.CASE_INSENSITIVE);
+
+    private SystemNnnHost() {}
+
+    /** Checks for a readable spt/sys.spt marker. The player validates the script when opened. */
+    public static boolean canOpen(File root) {
+        try {
+            return hasMarker(canonicalRoot(root));
+        } catch (IllegalArgumentException | IOException | SecurityException e) {
+            return false;
+        }
+    }
+
+    /** Queries the engine worker for the cached or explicitly regenerated layout. */
+    public static SaveLayoutConfig saveLayoutConfig(Context context,File root,boolean regenerate) throws IOException {
+        File game=canonicalRoot(root);
+        if(!hasMarker(game))throw new IOException("Cannot read spt/sys.spt in "+game);
+        if(!regenerate && GameResourcePaths.file(game,"init2","emberfall-system.cfg")==null &&
+           GameResourcePaths.file(game,"init","emberfall-system.cfg")==null)return null;
+        if(!NativeRuntimePack.ensure(context,NativeRuntimePack.PACK_SYSTEMNNN))
+            throw new IOException("SystemNNN runtime pack unavailable");
+        return SystemNnnSaveValidationService.layoutConfig(context,game,regenerate);
+    }
+
+    /** Builds an explicit in-app intent using an absolute filesystem path. */
+    public static Intent createLaunchIntent(Context context, File root, String title, String sourceUri,
+                                            boolean fullscreen, int readingSize, boolean exeAnalysis, boolean debugMode) throws IOException {
+        File game = canonicalRoot(root);
+        if (!hasMarker(game)) {
+            throw new IOException("Cannot read spt/sys.spt in " + game);
+        }
+        return new Intent(context, PlayerActivity.class)
+            .setAction(LaunchContract.RUNTIME_MODULE_ACTION)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+            .putExtra(LaunchContract.RUNTIME_MODULE_FOLDER_PATH, game.getPath())
+            .putExtra(LaunchContract.ROOT_URI, sourceUri)
+            .putExtra(LaunchContract.RUNTIME_MODULE_GAME_TITLE, title)
+            .putExtra(LaunchContract.RUNTIME_MODULE_PROTOCOL_VERSION, LaunchContract.RUNTIME_MODULE_VERSION)
+            .putExtra(EXTRA_FULLSCREEN, fullscreen)
+            .putExtra(EXTRA_READING_SIZE, normalizeReadingSize(readingSize))
+            .putExtra(EXTRA_EXE_ANALYSIS, exeAnalysis)
+            .putExtra(EXTRA_DEBUG_MODE, debugMode);
+    }
+
+    public static int legacyReadingSize(Context context) {
+        Object value = PlayerSettings.preferences(context).getAll().get("androidReadingSizePercent");
+        return value instanceof Integer ? normalizeReadingSize((Integer) value) : DEFAULT_READING_SIZE;
+    }
+
+    static int normalizeReadingSize(int value) {
+        return READING_SIZES.contains(value) ? value : DEFAULT_READING_SIZE;
+    }
+
+    /** Returns the shared sav directory without creating it. */
+    public static File saveDirectory(Context context, File root) throws IOException {
+        return GameSavePaths.forGame(canonicalRoot(root)).directory();
+    }
+
+    public static Closeable lockSaveDirectory(File root) throws IOException {
+        return GameSavePaths.forGame(canonicalRoot(root)).lock();
+    }
+
+    public static boolean hasActiveSaveAccess() {
+        return GameSavePaths.hasActiveAccess();
+    }
+
+    /** The player keeps this record through the final save flush. */
+    static synchronized Closeable registerPlayerTask(Activity activity,File game,String sourceUri) throws IOException {
+        File record=playerTaskFile(activity,activity.getTaskId());
+        File directory=record.getParentFile();
+        if(!directory.isDirectory()&&!directory.mkdirs()&&!directory.isDirectory())
+            throw new IOException("Cannot create the SystemNNN task directory");
+        if(PLAYER_TASKS.containsKey(record))throw new IOException("SystemNNN task already registered");
+        if(!taskRecordsSwept){
+            File[] stale=directory.listFiles((parent,name)->name.matches("systemnnn-[0-9]+\\.task"));
+            if(stale!=null){
+                taskRecordsSwept=true;
+                for(File file:stale)if(!PLAYER_TASKS.containsKey(file)&&!file.delete())taskRecordsSwept=false;
+            }
+        }
+        RandomAccessFile owner=new RandomAccessFile(record,"rw");
+        try{
+            if(owner.getChannel().tryLock()==null)throw new IOException("SystemNNN task already registered");
+            owner.setLength(0);
+            owner.writeUTF(sourceUri==null?"":sourceUri);
+            owner.writeUTF(game.getCanonicalPath());
+            PLAYER_TASKS.put(record,owner);
+            return ()->releasePlayerTask(record,owner);
+        }catch(IOException|RuntimeException e){
+            try{owner.close();}catch(IOException close){e.addSuppressed(close);}
+            throw e;
+        }
+    }
+
+    private static synchronized void releasePlayerTask(File record,RandomAccessFile owner) throws IOException {
+        if(!PLAYER_TASKS.remove(record,owner))return;
+        try{owner.close();}
+        finally{Files.deleteIfExists(record.toPath());}
+    }
+
+    /** The launcher also verifies that the matching AppTask belongs to PlayerActivity. */
+    public static boolean isLivePlayerTask(Context context,int taskId,String sourceUri,File gameRoot) {
+        if(taskId<0)return false;
+        try(RandomAccessFile record=new RandomAccessFile(playerTaskFile(context,taskId),"r")){
+            FileLock unlocked=record.getChannel().tryLock(0,Long.MAX_VALUE,true);
+            if(unlocked!=null){
+                unlocked.release();
+                return false;
+            }
+            String registeredUri=record.readUTF();
+            String registeredRoot=record.readUTF();
+            return !registeredUri.isEmpty()&&registeredUri.equals(sourceUri)||
+                gameRoot!=null&&registeredRoot.equals(gameRoot.getCanonicalPath());
+        }catch(IOException|OverlappingFileLockException|SecurityException e){return false;}
+    }
+
+    private static File playerTaskFile(Context context,int taskId){
+        return new File(new File(context.getFilesDir(),"engine_sessions"),"systemnnn-"+taskId+".task");
+    }
+
+    public static boolean isManagedSaveFile(Path relative) {
+        String path=relativeSaveName(relative);
+        if(path.isEmpty())return false;
+        if(isChartSave(path))return true;
+        if(relative.getNameCount()!=1)return false;
+        String name = relative.getFileName().toString();
+        if (isPcStorySave(name)||isPcGlobalSave(name)) return true;
+        if (name.endsWith(".bak")) {
+            name = name.substring(0, name.length() - 4);
+            if (name.equals(SAVE_SLOT_PRESENTATION_FILE)) return false;
+            relative = relative.resolveSibling(name);
+        }
+        return LegacySaveMigration.ownedFile(relative);
+    }
+
+    public static boolean isPcStorySave(String name) {
+        return PcStorySave.isSlotFile(name);
+    }
+
+    public static boolean isPcGlobalSave(String name) {
+        return isPcGlobalArchive(name)||isModernChartProgress(name)||isLegacyChartProgress(name);
+    }
+
+    public static boolean isPcGlobalArchive(String name) {
+        return PcSystemSave.isSystemFile(name)||PcSystemSave.isResultFile(name);
+    }
+
+    public static boolean isModernChartProgress(String name) {
+        return asciiChartPath(name)&&PcSystemSave.isChartFile(name);
+    }
+
+    private static boolean isLegacyChartProgress(String name) {
+        return asciiChartPath(name)&&name.regionMatches(true,0,"mushiex/",0,8)&&PcSystemSave.isChartFile(name.substring(8));
+    }
+
+    public static boolean isLegacyChartSave(String name) {
+        return asciiChartPath(name)&&(isLegacyChartProgress(name)||
+            name.regionMatches(true,0,"mushiex/",0,8)&&isChartNodeSave(name));
+    }
+
+    public static boolean isChartNodeSave(String name) {
+        Matcher match=CHART_NODE.matcher(name);
+        if(!match.matches())return false;
+        boolean legacy=match.group(1).equalsIgnoreCase("mushiex");
+        return Integer.parseInt(match.group(2))<=(legacy?9:32)&&Integer.parseInt(match.group(3))<(legacy?10000:262144);
+    }
+
+    private static boolean isChartSave(String name) {
+        return isModernChartProgress(name)||isLegacyChartSave(name)||isChartNodeSave(name);
+    }
+
+    private static boolean asciiChartPath(String name) {
+        for(int i=0;i<name.length();++i)if(name.charAt(i)>127)return false;
+        return true;
+    }
+
+    /** Directory entries can have a Unicode spelling whose displayed Path string is ASCII. */
+    public static boolean hasExactAsciiSaveSpelling(Path path) {
+        String name=path.toString();
+        return asciiChartPath(name)&&path.equals(path.getFileSystem().getPath(name));
+    }
+
+    private static String relativeSaveName(Path relative) {
+        if(relative.isAbsolute()||relative.getFileName()==null||!relative.normalize().equals(relative)||
+            !hasExactAsciiSaveSpelling(relative))return "";
+        for(Path part:relative)if(part.toString().equals(".")||part.toString().equals(".."))return "";
+        return relative.toString().replace(File.separatorChar,'/');
+    }
+
+    /** Retired slots can still be put back by an interrupted older transaction. */
+    public static boolean isRetiredRollbackFile(Path relative) {
+        if(relative.getNameCount()!=1)return false;
+        String name=relativeSaveName(relative);
+        if(name.isEmpty())return false;
+        if(name.endsWith(".bak"))relative=relative.resolveSibling(name.substring(0,name.length()-4));
+        return LegacySaveMigration.retiredSlot(relative);
+    }
+
+    public static boolean isManagedSaveDirectory(Path relative) {
+        String name=relativeSaveName(relative);
+        if(name.isEmpty())return false;
+        if(name.equalsIgnoreCase("mushiex")||name.equalsIgnoreCase(GameSavePaths.PREFIX+GameSavePaths.CHART))return true;
+        return isChartNodeSave(name+"/slot0.dat");
+    }
+
+    /** Checks the staged snapshot without promoting its backup files. */
+    public static boolean validateStagedSaveSnapshot(Context context,File game,File stage,Set<String> existing,Runnable checkCancelled)
+        throws IOException {
+        return SystemNnnSaveValidationService.validate(context,canonicalRoot(game),stage,requiresStorySnapshot(existing),checkCancelled);
+    }
+
+    static boolean canReplaceSaveSnapshot(File game,Map<String,File> incoming,boolean requiresStory) throws IOException {
+        byte[] root=canonicalRoot(game).getPath().getBytes(StandardCharsets.UTF_8);
+        return canReplaceSaveSnapshot(incoming,requiresStory,PcStorySave::valid,
+            (name,data)->NativeGame.validateChartFile(root,name.getBytes(StandardCharsets.UTF_8),data));
+    }
+
+    interface SlotValidator {
+        boolean valid(InputStream input) throws IOException;
+    }
+    interface ChartValidator {
+        boolean valid(String relative,byte[] data) throws IOException;
+    }
+
+    static boolean canReplaceSaveSnapshot(Map<String,File> incoming,boolean requiresStory,SlotValidator validator,ChartValidator chartValidator)
+        throws IOException {
+        boolean hasStory=false,hasPcProgress=false;
+        Set<String> chartPaths=new HashSet<>();
+        for(Map.Entry<String,File> entry:incoming.entrySet()){
+            String name=entry.getKey();
+            Path relative=Paths.get(name);
+            if(!name.equals(relativeSaveName(relative))||!isManagedSaveFile(relative))return false;
+            if(isChartSave(name)){
+                if(!chartPaths.add(name.toLowerCase(Locale.ROOT)))return false;
+                byte[] bytes=readChartFile(name,entry.getValue());
+                if(bytes==null||!chartValidator.valid(name,bytes))return false;
+                if(isChartNodeSave(name))hasStory=true;
+                else hasPcProgress=true;
+                continue;
+            }
+            if(isPcGlobalSave(name)){
+                if(!PcSystemSave.valid(entry.getValue()))return false;
+                hasPcProgress|=PcSystemSave.isSystemFile(name);
+                continue;
+            }
+            // AtomicFile opens the backup first when both files exist.
+            if(!isPcStorySave(name)||incoming.containsKey(name+".bak"))continue;
+            File file=entry.getValue();
+            try(InputStream in=Files.newInputStream(file.toPath(),LinkOption.NOFOLLOW_LINKS)){
+                if(!validator.valid(in))return false;
+            }
+            hasStory=true;
+        }
+        String progress=GameSavePaths.PREFIX+GameSavePaths.READ;
+        File primary=incoming.get(progress),backup=incoming.get(progress+".bak");
+        boolean hasProgress=primary!=null||backup!=null;
+        if(hasProgress&&!GameProgress.hasReadableBase(primary,backup))return false;
+        if(hasStory)return true;
+        return (hasProgress||hasPcProgress)&&!requiresStory;
+    }
+
+    static boolean requiresStorySnapshot(Set<String> existing){
+        return existing.stream().anyMatch(name->isPcStorySave(name)||isChartNodeSave(name));
+    }
+
+    private static byte[] readChartFile(String name,File file) throws IOException {
+        BasicFileAttributes info=Files.readAttributes(file.toPath(),BasicFileAttributes.class,LinkOption.NOFOLLOW_LINKS);
+        long maximum=isChartNodeSave(name)?2L*1024*1024:262144;
+        if(!info.isRegularFile()||info.size()<1||info.size()>maximum)return null;
+        if(isLegacyChartProgress(name)&&info.size()!=(name.substring(8).equalsIgnoreCase("mita.dat")?10004:10000))return null;
+        byte[] bytes=new byte[(int)info.size()];
+        try(DataInputStream input=new DataInputStream(Files.newInputStream(file.toPath(),LinkOption.NOFOLLOW_LINKS))){
+            input.readFully(bytes);
+            if(input.read()!=-1)return null;
+        }
+        return bytes;
+    }
+
+    /** Caller holds the game's shared save lock. Retired backups stay outside ZIP imports. */
+    public static int clearRetiredProgressBackups(File directory) throws IOException {
+        return GameProgress.clearRetiredBackups(directory);
+    }
+
+    public static final class SaveBusyException extends IOException {
+        SaveBusyException() {
+            super("SAVE_DIR_IN_USE");
+        }
+    }
+
+    private static File canonicalRoot(File root) throws IOException {
+        if (root == null || !root.isAbsolute()) {
+            throw new IllegalArgumentException("SystemNNN requires an absolute filesystem path");
+        }
+        return root.getCanonicalFile();
+    }
+
+    private static boolean hasMarker(File game) {
+        File marker = GameResourcePaths.file(game, "spt", "sys.spt");
+        return marker != null && marker.canRead();
+    }
+}

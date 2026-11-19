@@ -6,22 +6,74 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import com.tyranor.next.core.engine.graphics.putDisabledGraphicsRequest
 
 /** 外置 APK 引擎启动与安装状态检查。 */
 object ExternalEngineLauncher {
     fun isPackageInstalled(context: Context, module: ExternalEngineModule): Boolean =
+        checkInstallation(context, module) == null
+
+    /**
+     * 模块缺失或版本不匹配时返回类型化失败，可用时返回 null。
+     * 传入 [launchTarget] 时按该目标要求的最低版本（[ExternalEngineModule.minimumVersionCodeFor]）判定，
+     * 不传则只看模块级要求（引擎页、设置页的安装状态）。
+     */
+    fun checkInstallation(
+        context: Context,
+        module: ExternalEngineModule,
+        launchTarget: String? = null,
+    ): ExternalEngineLaunchResult? =
         try {
             val packageManager = context.applicationContext.packageManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 packageManager.getPackageInfo(module.packageName, PackageManager.PackageInfoFlags.of(0))
             } else {
                 @Suppress("DEPRECATION")
                 packageManager.getPackageInfo(module.packageName, 0)
             }
-            true
+            val installedVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                packageInfo.versionCode.toLong()
+            }
+            val versionError = versionCodeError(installedVersionCode, module, launchTarget)
+            if (versionError != null) {
+                ExternalEngineLaunchResult.failure(
+                    versionError,
+                    moduleNameRes = module.displayNameRes,
+                    moduleNameFallback = module.displayName,
+                    engineName = module.engine.displayName,
+                    installUrl = module.installUrl,
+                )
+            } else {
+                null
+            }
         } catch (_: PackageManager.NameNotFoundException) {
-            false
+            ExternalEngineLaunchResult.failure(
+                ExternalEngineErrorCode.PACKAGE_NOT_INSTALLED,
+                moduleNameRes = module.displayNameRes,
+                moduleNameFallback = module.displayName,
+                engineName = module.engine.displayName,
+                installUrl = module.installUrl,
+            )
         }
+
+    internal fun isVersionCodeSupported(installed: Long, minimum: Long): Boolean =
+        minimum <= 0L || installed >= minimum
+
+    internal fun versionCodeError(
+        installed: Long,
+        module: ExternalEngineModule,
+        launchTarget: String? = null,
+    ): ExternalEngineErrorCode? {
+        val minimum = launchTarget?.let(module::minimumVersionCodeFor) ?: module.minimumVersionCode
+        return when {
+            !isVersionCodeSupported(installed, minimum) -> ExternalEngineErrorCode.PACKAGE_OUTDATED
+            installed > module.maximumVersionCode -> ExternalEngineErrorCode.PACKAGE_VERSION_MISMATCH
+            else -> null
+        }
+    }
 
     fun launch(context: Context, module: ExternalEngineModule, request: ExternalEngineLaunchRequest): ExternalEngineLaunchResult {
         if (module.requiresGameDirectoryPath && request.gameDirectoryPath.isBlank()) {
@@ -30,13 +82,7 @@ object ExternalEngineLauncher {
                 engineName = request.game.engine.displayName,
             )
         }
-        if (!isPackageInstalled(context, module)) {
-            return ExternalEngineLaunchResult.failure(
-                ExternalEngineErrorCode.PACKAGE_NOT_INSTALLED,
-                moduleNameRes = module.displayNameRes,
-                moduleNameFallback = module.displayName,
-            )
-        }
+        checkInstallation(context, module, request.launchTarget)?.let { return it }
         module.prepareForLaunch(context, request)?.let { return it }
 
         val intent = module.buildLaunchIntent(request).addFlags(
@@ -44,6 +90,7 @@ object ExternalEngineLauncher {
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or
                 Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
         )
+        intent.putDisabledGraphicsRequest(onlyMissing = true)
         return try {
             context.applicationContext.startActivity(intent)
             ExternalEngineLaunchResult.success()
@@ -52,6 +99,7 @@ object ExternalEngineLauncher {
                 ExternalEngineErrorCode.ACTIVITY_NOT_FOUND,
                 moduleNameRes = module.displayNameRes,
                 moduleNameFallback = module.displayName,
+                installUrl = module.installUrl,
             )
         } catch (_: SecurityException) {
             ExternalEngineLaunchResult.failure(

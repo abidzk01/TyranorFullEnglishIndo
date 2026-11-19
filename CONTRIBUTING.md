@@ -1,105 +1,105 @@
-# Contributing Guide
+# 贡献指南
 
-Thank you for your interest in and support for this project! 🎉
+感谢你对本项目的关注与支持！🎉
 
-You are welcome to participate in building the project by submitting Issues, Pull Requests, fixing bugs, improving documentation, or proposing new features.
+欢迎通过提交 Issue、Pull Request、修复 Bug、完善文档或提出新功能建议等方式参与项目建设。
 
-Before you start contributing, please read the notes below so we can collaborate more efficiently.
-
----
-
-## 1. Ways to Contribute
-
-You can participate in the project in the following ways:
-
-* Submit bug reports
-* Propose new features
-* Fix existing issues
-* Improve code structure or performance
-* Improve UI / UX
-* Improve project documentation
-* Add comments
-* Improve compatibility
-* Submit new feature implementations
+在开始贡献之前，请阅读以下说明，以便我们更高效地进行协作。
 
 ---
 
-## 2. Submitting an Issue
+## 1. 贡献方式
 
-If you find a bug or have a new feature suggestion, please create an Issue first.
+你可以通过以下方式参与项目：
 
-When submitting a bug, it is recommended to include as much of the following information as possible:
+* 提交 Bug 报告
+* 提出新功能建议
+* 修复已有问题
+* 优化代码结构或性能
+* 改进 UI / UX
+* 完善项目文档
+* 补充注释
+* 优化兼容性
+* 提交新的功能实现
 
-* Description of the problem
-* Version where the problem occurs
-* Android / OS version
-* Device model
-* Steps to reproduce
-* Expected behavior
-* Actual behavior
-* Error logs
-* Screenshots or screen recordings (if available)
+---
 
-For example:
+## 2. 提交 Issue
+
+如果你发现了 Bug 或有新的功能建议，请优先创建一个 Issue。
+
+提交 Bug 时，建议尽量包含以下信息：
+
+* 问题描述
+* 出现问题的版本
+* Android / 系统版本
+* 设备型号
+* 复现步骤
+* 预期行为
+* 实际行为
+* 错误日志
+* 截图或录屏（如果有）
+
+例如：
 
 ```text
-Problem:
-After entering the game library page, pulling up cannot load the next page.
+问题：
+进入游戏库页面后，上拉无法加载下一页。
 
-Steps to reproduce:
-1. Open the app
-2. Enter the game library
-3. Scroll to the bottom
-4. Keep pulling up
+复现步骤：
+1. 打开应用
+2. 进入游戏库
+3. 滚动到底部
+4. 继续上拉
 
-Expected behavior:
-The next page of games is loaded.
+预期行为：
+加载下一页游戏。
 
-Actual behavior:
-No loading operation is triggered.
+实际行为：
+没有触发任何加载操作。
 
-Device:
+设备：
 Android 15
 ```
 
-For feature suggestions, please describe as clearly as possible:
+对于功能建议，请尽量说明：
 
 ```text
-Feature:
-Add a game favorites feature.
+功能：
+希望增加游戏收藏功能。
 
-Purpose:
-Helps users quickly find the games they play often.
+用途：
+方便用户快速找到常玩的游戏。
 
-Suggested implementation:
-Add a favorite button on the game card, and add a "Favorites" category.
+建议实现：
+在游戏卡片增加收藏按钮，并增加一个“收藏”分类。
 ```
 
 ---
 
-## 3. Fork the Project
+## 3. Fork 项目
 
-First, fork this project to your own GitHub account.
+首先 Fork 本项目到自己的 GitHub 账号。
 
-Then clone your repository:
+然后克隆你的仓库：
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/PROJECT_NAME.git
 ```
 
-Enter the project directory:
+进入项目目录：
 
 ```bash
 cd PROJECT_NAME
 ```
 
-Add the original repository as the upstream repository:
+添加原仓库作为上游仓库：
 
 ```bash
 git remote add upstream https://github.com/ORIGINAL_OWNER/PROJECT_NAME.git
 ```
 
-View the remotes:
+查看远程仓库：
 
 ```bash
 git remote -v
@@ -107,292 +107,292 @@ git remote -v
 
 ---
 
-## 6. Code Standards
+## 4. 代码规范
 
-When submitting code, please keep it consistent with the project's existing code style.
+提交代码时，请尽量保持与项目现有代码风格一致。
 
-Basic requirements:
-* vibe coding must strictly follow the code standards in `AGENTS.md`.
-* Use Kotlin 13.0.0 or later
-* Use clear, meaningful variable names
-* Avoid meaningless abbreviations
-* Avoid duplicate code
-* Do not submit obviously unrelated code changes
-* Do not reformat the whole project at will
-* Remove dead code and debug code
-* Do not submit sensitive information
-* Add comments appropriately for complex logic
-
----
-
-## 7. Commit Conventions
-
-It is recommended that each commit completes only one kind of change.
-
-The following format is recommended:
-
-```text
-type: short description
-```
-
-For example:
-
-```text
-feat: add game favorites feature
-fix: fix the game library failing to load when pulling up
-refactor: refactor the game scanning logic
-docs: update README
-style: improve the game card layout
-perf: improve game list loading performance
-chore: update project dependencies
-```
+基本要求：
+* vibe coding 必须严格遵守 `AGENTS.md` 中的代码规范。
+* 使用仓库 Gradle Wrapper 与固定工具链；Kotlin 版本以 `gradle/libs.versions.toml` 为准，环境和验证命令见 [AGENTS.md](AGENTS.md#构建)
+* 使用清晰、有意义的变量名
+* 避免无意义缩写
+* 避免重复代码
+* 不提交明显无关的代码修改
+* 不随意格式化整个项目
+* 删除无用代码和调试代码
+* 不提交敏感信息
+* 对复杂逻辑适当添加注释
 
 ---
 
-## 8. Submitting Code
+## 5. Commit 规范
 
-After finishing your changes:
+建议每个 Commit 只完成一类修改。
+
+推荐使用以下格式：
+
+```text
+类型: 简短描述
+```
+
+例如：
+
+```text
+feat: 添加游戏收藏功能
+fix: 修复游戏库无法上拉加载的问题
+refactor: 重构游戏扫描逻辑
+docs: 更新 README
+style: 优化游戏卡片布局
+perf: 优化游戏列表加载性能
+chore: 更新项目依赖
+```
+
+---
+
+## 6. 提交代码
+
+完成修改后：
 
 ```bash
 git add .
 ```
 
-Commit:
+提交：
 
 ```bash
-git commit -m "feat: add game favorites feature"
+git commit -m "feat: 添加游戏收藏功能"
 ```
 
-Push to your own repository:
+推送到自己的仓库：
 
 ```bash
 git push origin feature/game-favorite
 ```
 
-Then create a Pull Request on GitHub.
+然后在 GitHub 上创建 Pull Request。
 
 ---
 
-## 9. Pull Request Conventions
+## 7. Pull Request 规范
 
-When creating a Pull Request, please provide as clear a description as possible.
+创建 Pull Request 时，请尽量提供清晰的说明。
 
-Recommended format:
+推荐格式：
 
 ```markdown
-## What was changed
+## 修改内容
 
-Briefly explain what this PR does.
+简单说明本次 PR 做了什么。
 
-## Why the change is needed
+## 修改原因
 
-Why this change is necessary.
+为什么需要进行这个修改。
 
-## Main changes
+## 主要改动
 
-- Changed xxx
-- Added xxx
-- Fixed xxx
+- 修改 xxx
+- 新增 xxx
+- 修复 xxx
 
-## Testing
+## 测试情况
 
-- [x] Local testing completed
-- [x] Existing functionality works normally
-- [ ] Tested on multiple devices
+- [x] 已完成本地测试
+- [x] 原有功能正常
+- [ ] 已在多个设备测试
 
-## Related Issue
+## 相关 Issue
 
 Closes #123
 
-## Screenshots
+## 截图
 
-If UI changes are involved, please attach before and after screenshots.
+如果涉及 UI 修改，请附上修改前后的截图。
 ```
 
-A PR that contains a large number of unrelated features and changes at the same time is not accepted; it is hard to review and unclear.
-For large changes, it is recommended to create an Issue for discussion first. Be sure to confirm whether the feature fits the project direction.
-If the feature fits the project direction, then create the PR.
+不接受一个 PR 同时包含大量互不相关的功能与修改，审核难度大且不明确。
+大批量代码建议先创建 Issue 进行讨论。务必确认功能是否符合项目方向。
+如果功能符合项目方向，再创建 PR。
 
 ---
 
-## 10. Feature Changes and Additions
+## 8. 功能 修改与添加
 
-If the Pull Request involves feature changes or additions, it is recommended to provide:
+如果 Pull Request 涉及功能修改或添加，建议提供：
 
-* A before/after comparison report or a detailed description of the new feature
-* A detailed explanation of the change approach or a detailed description of the new feature
-* How the fixed or added feature applies, and how the problem is solved
-* Intuitive on-device test screenshots and comparisons; if images cannot show this accurately or intuitively, attach a video link
+* 修改前与修改后的对比报告/新增功能的详细说明
+* 详细修改思路与说明/新增功能的详细说明
+* 解决或是新增的功能的适用以及问题的解决
+* 直观的实机测试截图与对比，图片无法准确直观请附上视频链接
 
-Please try to ensure that changes and additions do not break the integrity and accuracy of other features.
-
----
-
-## 10. UI Changes
-
-If the Pull Request involves UI changes, it is recommended to provide:
-
-* Screenshots before the change
-* Screenshots after the change
-* Phone UI screenshots
-* Tablet UI screenshots (if applicable)
-* Landscape screenshots (if applicable)
-* Dark mode screenshots (if applicable)
-
-Please try to ensure that the changes do not break layouts at other screen sizes and comply with the UI standards.
+请尽量确保修改与添加不会破坏其他功能的完整性与准确性。
 
 ---
 
-## 11. Engine and Low-Level Changes
+## 9. UI 修改
 
-If the Pull Request involves engine changes or low-level changes, it is recommended to provide:
+如果 Pull Request 涉及界面修改，建议提供：
 
-* A detailed report comparing the actual optimization effect against expectations
-* A link to an on-device test video or intuitive screenshots
-* A detailed explanation of the change approach
-* Small-scale real-world usage testing
-* For cases that may produce false positives, clearly mark the relevant code sections and explanations
+* 修改前截图
+* 修改后截图
+* 手机界面截图
+* 平板界面截图（如果适用）
+* 横屏截图（如果适用）
+* 深色模式截图（如果适用）
 
-
-Please be sure to ensure that the changes do not break the normal operation and integrity of the engine and low-level systems.
+请尽量确保修改不会破坏其他屏幕尺寸下的布局以及符合UI规范。
 
 ---
 
-## 11. Bug Fixes
+## 10. 引擎与底层 修改
 
-When fixing a bug, please describe as clearly as possible:
+如果 Pull Request 涉及引擎修改或底层修改，建议提供：
+
+* 实际优化效果与预期对比详细报告
+* 附上真机测试视频链接或者可直观的截图
+* 详细的改动思路与说明
+* 进行小范围实际使用测试
+* 可能会误报的情况下标注好相关代码段与说明
+
+
+请务必确保修改不会破坏引擎与底层运作的正常与完整性。
+
+---
+
+## 11. Bug 修复
+
+修复 Bug 时，请尽量说明：
 
 ```text
-Cause of the problem:
+问题原因：
 xxx
 
-Fix approach:
+修复方式：
 xxx
 
-Impact scope:
+影响范围：
 xxx
 
-Test results:
+测试结果：
 xxx
 ```
 
-If a corresponding Issue exists, you can write in the Pull Request:
+如果存在对应 Issue，可以在 Pull Request 中写：
 
 ```text
 Fixes #123
 ```
 
-or:
+或：
 
 ```text
 Closes #123
 ```
 
-After the Pull Request is merged, the corresponding Issue will be closed automatically.
+Pull Request 合并后，对应 Issue 会自动关闭。
 
 ---
 
-## 12. New Features
+## 12. 新功能
 
-For larger new features, it is recommended to create an Issue for discussion first.
+较大的新功能建议先创建 Issue 进行讨论。
 
-This allows you to confirm in advance:
+这样可以提前确认：
 
-* Whether the feature fits the project direction
-* Whether someone has already implemented it
-* Whether a more suitable implementation approach exists
-* Whether the architecture needs to be adjusted
-* Whether existing features will be affected
+* 功能是否符合项目方向
+* 是否已经有人实现
+* 是否存在更合适的实现方式
+* 是否需要调整架构
+* 是否会影响已有功能
 
-This avoids discovering after a large amount of development work that the feature cannot be merged.
-
----
-
-## 13. Pull Request Review
-
-After submitting a PR, wait for the bot to make change suggestions and revise accordingly.
-If you disagree, reply separately to the specific code false positive reported by the bot.
-Do not explain multiple problems in a single note; reply to each problem separately.
-
-For example:
-
-* Change the code structure
-* Adjust naming
-* Fix compatibility issues
-* Add exception handling
-* Supplement the documentation
-* Fix UI problems
-
-You can continue to push commits to the original branch.
-
-The Pull Request updates automatically; there is no need to create a new PR.
+避免完成大量开发后才发现功能无法合并。
 
 ---
 
-## 14. Merge Requirements
+## 13. Pull Request 审核
 
-Before merging, a Pull Request should preferably satisfy:
+提交 PR 后，等待机器人提出修改建议，根据建议进行修改。
+如果有异议请对机器人具体代码误报进行单独回复说明
+不要在一条说明里解释多条问题，每个问题都单独回复。
 
-* The project compiles normally
-* No obvious runtime errors
-* No breakage of existing features
-* No sensitive information submitted
-* No large number of unrelated file changes
-* Commit messages are basically clear
-* New code matches the overall style of the project
-* UI changes have no obvious adaptation problems
+例如：
 
-Whether to finally merge is decided by the project maintainers according to the actual situation.
+* 修改代码结构
+* 调整命名
+* 修复兼容性问题
+* 增加异常处理
+* 补充文档
+* 修复 UI 问题
+
+你可以继续向原分支提交 Commit。
+
+Pull Request 会自动更新，无需重新创建 PR。
 
 ---
 
-## 15. Code of Conduct
+## 14. 合并要求
 
-When participating in project discussions, please stay friendly and respectful.
+Pull Request 在合并前应尽量满足：
 
-Please avoid:
+* 项目能够正常编译
+* 没有明显运行时错误
+* 没有破坏已有功能
+* 没有提交敏感信息
+* 没有大量无关文件修改
+* Commit 信息基本清晰
+* 新增代码符合项目整体风格
+* UI 修改不存在明显适配问题
 
-* Personal attacks
-* Malicious mockery
-* Pointless arguments
+是否最终合并由项目维护者根据实际情况决定。
+
+---
+
+## 15. 行为准则
+
+参与项目讨论时，请保持友好和尊重。
+
+请避免：
+
+* 人身攻击
+* 恶意嘲讽
+* 无意义争论
 * Spam
-* Posting content unrelated to the project
-* Maliciously submitting Issues or Pull Requests
+* 发布与项目无关的内容
+* 恶意提交 Issue 或 Pull Request
 
-It is normal to have different technical opinions; please keep the discussion focused on the code and the problem itself.
+技术观点不同很正常，请尽量围绕代码和问题本身进行讨论。
 
 ---
 
-## 16. First Time Contributing to Open Source?
+## 16. 第一次参与开源？
 
-If this is your first Pull Request, that is completely fine.
+如果这是你第一次提交 Pull Request，也完全没有问题。
 
-The basic flow is actually quite simple:
+基本流程其实很简单：
 
 ```text
-Fork the project
+Fork 项目
    ↓
-Clone locally
+Clone 到本地
    ↓
-Create a new branch
+创建新分支
    ↓
-Modify the code
+修改代码
    ↓
 Commit
    ↓
 Push
    ↓
-Create a Pull Request
+创建 Pull Request
 ```
 
-If your implementation still has shortcomings, you can also submit the PR first and then keep improving it based on the review feedback.
+如果你的实现还有不足，也可以先提交 PR，再根据 Review 意见继续修改。
 
 ---
 
-## Thanks for Contributing ❤️
+## 感谢贡献 ❤️
 
-Thanks to all contributors who participate in the development, testing, feedback, and documentation maintenance of this project.
+感谢所有参与本项目开发、测试、反馈和文档维护的贡献者。
 
-Every Issue, Pull Request, and suggestion helps the project become better.
+每一个 Issue、Pull Request 和建议，都能够帮助项目变得更好。
 
-Welcome to contribute!
+欢迎参与贡献！

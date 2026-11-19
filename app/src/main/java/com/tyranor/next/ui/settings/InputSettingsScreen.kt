@@ -6,9 +6,11 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -24,15 +26,21 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.lifecycle.Lifecycle
@@ -40,32 +48,44 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tyranor.next.R
 import com.tyranor.next.core.input.InputRemapRepository
+import com.tyranor.next.theme.PageTextColor
 import com.tyranor.next.theme.AppComponentCornerRadius
 import com.tyranor.next.theme.MiuixSettingsTheme
 import com.tyranor.next.theme.glassBorder
-import com.tyranor.next.theme.glassShadow
 import com.tyranor.next.ui.common.AppAlertDialog
 import com.tyranor.next.ui.common.AppScreenActivity
 import com.tyranor.next.ui.common.AppSearchField
-import com.tyranor.next.ui.common.AppTopBar
+import com.tyranor.next.ui.common.AppSecondaryTopBar
 import com.tyranor.next.ui.common.BottomInsetSpacer
 import com.tyranor.next.ui.common.DialogTextButton
 import com.tyranor.next.ui.common.NoIndication
 import com.tyranor.next.ui.common.NoRippleTextButton
-import com.tyranor.next.ui.game.startActivityWithPageTransition
+import com.tyranor.next.ui.common.motion.BlurCrossfade
+import com.tyranor.next.ui.common.motion.MotionMode
+import com.tyranor.next.ui.common.motion.PressSquishDefaults
+import com.tyranor.next.ui.common.motion.ProvideEntrance
+import com.tyranor.next.ui.common.motion.bounceOnChange
+import com.tyranor.next.ui.common.motion.ExpandSectionVisibility
+import com.tyranor.next.ui.common.motion.skipEntranceOnDrag
+import com.tyranor.next.ui.common.motion.pressSquish
+import com.tyranor.next.ui.common.motion.pressSquishGroup
+import com.tyranor.next.ui.common.motion.staggeredEntrance
+import com.tyranor.next.ui.common.motion.startActivityWithPageTransition
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Card as MiuixCard
 import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.SwitchPreference
+import com.tyranor.next.ui.common.ArrowPreference
+import com.tyranor.next.ui.common.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.tyranor.next.ui.common.notice.AppNotice
 
 /**
  * 输入与手柄设置页：全局虚拟按键/手柄映射开关、按键方案管理与手柄映射入口。
  *
- * 入口在侧边栏「妙妙工具」面板（原设置页入口已迁入），与 EngineSettingsMenuActivity 同为顶层入口（不隶属单一引擎）。
+ * 入口在侧边栏「妙妙工具」面板（原设置页入口已迁入），为顶层入口（不隶属单一引擎）。
  * 本页只消费 `core/input` 门面（[InputRemapRepository] / [com.tyranor.next.core.input.PadEditorHost]），
  * 不直接依赖 engine 类型（三层架构：ui 不得 import `com.core.*`）。
  */
@@ -80,6 +100,10 @@ class InputSettingsActivity : AppScreenActivity() {
     }
 }
 
+/**
+ * 管理全局输入开关与按键方案的选择、导入导出和编辑入口，返回前台时重读共享设置。
+ * 列表入场和内容变换只影响展示，方案的身份、保护与读写仍由输入仓库管理。
+ */
 @Composable
 internal fun InputSettingsScreen() {
     val ctx = LocalContext.current
@@ -108,6 +132,20 @@ internal fun InputSettingsScreen() {
     }
 
     LaunchedEffect(Unit) { reloadProfiles() }
+
+    // 方案行增删动效（仅「增强」档）：已见过的方案 id —— 首次加载与列表项滚回可见区时不重播展开，
+    // 只有之后真正新增（新建 / 导入 / 复制）的方案才从 0 高度展开进场
+    var knownProfileIds by remember { mutableStateOf<Set<String>?>(null) }
+    LaunchedEffect(profiles) {
+        if (profiles.isNotEmpty()) knownProfileIds = knownProfileIds.orEmpty() + profiles.map { it.id }
+    }
+    // 正在退场的方案（id → 删除前的位置与数据）：确认删除即开始原位收起；删除成功后列表里已没有它，
+    // 仍按原位置暂留到收起完成再移除；删除失败则移出本表，原路展开回来
+    val exitingProfiles = remember {
+        mutableStateMapOf<String, IndexedValue<InputRemapRepository.ProfileSummary>>()
+    }
+    // 「恢复默认手柄映射」写盘成功的次数：驱动按钮落点回弹（第一次组合不弹）
+    var gamepadResetTick by remember { mutableIntStateOf(0) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -211,19 +249,21 @@ internal fun InputSettingsScreen() {
     }
 
     MiuixSettingsTheme {
+        ProvideEntrance {
         MiuixScaffold(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().skipEntranceOnDrag(),
             containerColor = ComposeColor.Transparent,
             contentWindowInsets = WindowInsets(0.dp),
             topBar = {
-                AppTopBar(
+                AppSecondaryTopBar(
                     title = stringResource(R.string.input_settings_title),
                     background = ComposeColor.Transparent,
-                    contentColor = MiuixTheme.colorScheme.onBackground,
+                    contentColor = PageTextColor,
                 )
             },
         ) { innerPadding ->
             LazyColumn(
+                // 顶栏透明：列表整体垫在顶栏下方（持久 padding），避免滚动时内容穿过顶栏
                 modifier = Modifier.fillMaxSize()
                     .padding(horizontal = 12.dp)
                     .padding(top = innerPadding.calculateTopPadding()),
@@ -231,12 +271,14 @@ internal fun InputSettingsScreen() {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item {
+                    Box(Modifier.pressSquishGroup().staggeredEntrance(0)) {
                     EngineCard(stringResource(R.string.engine_settings_input_title)) {
                         // 开关展示值：未显式设置时按「开」显示（与 MV/MZ 的默认一致，
                         // 见 globalPadSwitchValue 的 KDoc），否则用户看到「关着但游戏里
                         // 有按键层」、且想关闭得点两下（先显式开、再显式关）。切换即写入
                         // 显式设置。Tyrano/VN/WebOther 的实际默认是关，由摘要文案说明。
                         SwitchPreference(
+                            modifier = Modifier.pressSquish(scale = PressSquishDefaults.RowScale),
                             title = stringResource(R.string.engine_settings_input_pad_title),
                             summary = stringResource(R.string.engine_settings_input_pad_summary),
                             checked = padEnabled,
@@ -246,6 +288,7 @@ internal fun InputSettingsScreen() {
                             },
                         )
                         SwitchPreference(
+                            modifier = Modifier.pressSquish(scale = PressSquishDefaults.RowScale),
                             title = stringResource(R.string.engine_settings_input_gamepad_title),
                             summary = stringResource(R.string.engine_settings_input_gamepad_summary),
                             checked = gamepadEnabled,
@@ -255,9 +298,11 @@ internal fun InputSettingsScreen() {
                             },
                         )
                     }
+                    }
                 }
 
                 item {
+                    Box(Modifier.pressSquishGroup().staggeredEntrance(1)) {
                     EngineCard(stringResource(R.string.input_settings_profiles_title)) {
                         // 新建/导入置于方案列表上方（列表条目随方案数量增长，操作入口保持固定位置）
                         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
@@ -278,10 +323,22 @@ internal fun InputSettingsScreen() {
                                 )
                             }
                         }
-                        profiles.forEach { profile ->
+                        // 退场中的已删除方案按原位置暂留（「普通」档该表恒为空，等同原 profiles）
+                        val copyName = stringResource(R.string.input_settings_profile_copy)
+                        val defaultName = stringResource(R.string.input_settings_profile_default)
+                        withExitingProfiles(profiles, exitingProfiles).forEach { profile ->
+                          // 按 id 稳定身份：增删时其余行的状态（展开 / 退场进度）跟着各自的方案走
+                          key(profile.id) {
                             // 展示名在组合期算好再传入：onExport/onCopy 等回调是普通 lambda，
                             // 不能在内部调用 @Composable 的 profileDisplayName
                             val displayName = profileDisplayName(profile)
+                            val exiting = profile.id in exitingProfiles
+                            ProfileRowMotion(
+                                fresh = knownProfileIds?.contains(profile.id) == false,
+                                exiting = exiting,
+                                inList = !exiting || profiles.any { it.id == profile.id },
+                                onExited = { exitingProfiles.remove(profile.id) },
+                            ) {
                             ProfileRow(
                                 profile = profile,
                                 selected = profile.id == profileId,
@@ -299,13 +356,12 @@ internal fun InputSettingsScreen() {
                                 onCopy = {
                                     // id/命名都要读方案目录，全部放 IO 线程（原先在主线程）
                                     scope.launch {
-                                        val copyName = ctx.getString(R.string.input_settings_profile_copy)
                                         val copied = withContext(Dispatchers.IO) {
                                             val id = InputRemapRepository.newProfileId(ctx)
                                             // 占位名的方案（内置默认 / 迁移主布局）复制时用本地化名字
                                             // 作底，否则副本会带上英文 "Default"
                                             val baseName = if (profile.isDefault || profile.isLegacyMain) {
-                                                ctx.getString(R.string.input_settings_profile_default)
+                                                defaultName
                                             } else {
                                                 profile.name
                                             }
@@ -326,14 +382,17 @@ internal fun InputSettingsScreen() {
                                 onDelete = if (profile.isDefault) null else ({ deleteTarget = profile.id }),
                                 onExport = { requestExport(profile, displayName) },
                             )
+                            }
+                          }
                         }
+                    }
                     }
                 }
 
                 item {
                     // 卡片不设标题：条目自身已含标题与说明，避免与卡片标题重复
                     MiuixCard(
-                        modifier = Modifier.fillMaxWidth().glassShadow().glassBorder(),
+                        modifier = Modifier.pressSquishGroup().staggeredEntrance(2).fillMaxWidth().glassBorder(),
                         cornerRadius = AppComponentCornerRadius,
                     ) {
                         Column(Modifier.padding(vertical = 4.dp)) {
@@ -346,12 +405,18 @@ internal fun InputSettingsScreen() {
                                 Box(Modifier.weight(1f)) {
                                     NoRippleTextButton(
                                         text = stringResource(R.string.input_settings_reset_gamepad),
+                                        // 落点反馈：写盘成功后按钮轻弹一下（与 Toast 同时，不被提示吞掉）
+                                        modifier = Modifier.bounceOnChange(
+                                            gamepadResetTick.takeIf { it > 0 },
+                                            depth = 0.12f,
+                                        ),
                                         onClick = {
                                             // 写盘带 fsync：放主线程会卡住点击瞬间，移到 IO 线程
                                             scope.launch {
                                                 val ok = withContext(Dispatchers.IO) {
                                                     InputRemapRepository.resetGamepadMap(ctx)
                                                 }
+                                                if (ok) gamepadResetTick++
                                                 // 写盘失败必须提示：否则用户看到「已恢复」但映射没变
                                                 toast(
                                                     ctx,
@@ -371,6 +436,7 @@ internal fun InputSettingsScreen() {
                 }
                 item { BottomInsetSpacer() }
             }
+        }
         }
     }
 
@@ -450,10 +516,17 @@ internal fun InputSettingsScreen() {
                     text = stringResource(R.string.common_delete),
                     onClick = {
                         deleteTarget = null
+                        // 「增强」档：确认即开始原位收起（不等写盘），记下原位置供删除后暂留
+                        val exitIndex = profiles.indexOfFirst { it.id == target }
+                        if (MotionMode.enhanced && exitIndex >= 0) {
+                            exitingProfiles[target] = IndexedValue(exitIndex, profiles[exitIndex])
+                        }
                         scope.launch {
                             val deleted = withContext(Dispatchers.IO) {
                                 InputRemapRepository.deleteProfile(ctx, target)
                             }
+                            // 删除失败：该行原路展开回来（与下方提示同时发生）
+                            if (!deleted) exitingProfiles.remove(target)
                             // 删除失败（占用/权限）必须提示，否则列表条目还在、用户以为点了没反应
                             if (!deleted) toast(ctx, R.string.input_settings_profile_delete_failed)
                             // 只有删除成功才回退全局选择：失败时把选择切到 default 会
@@ -480,7 +553,7 @@ internal fun InputSettingsScreen() {
  * `onDelete` 为 null 表示不可删除（内置默认方案）：入口整体隐藏而不是点击后才报错。
  */
 @Composable
-private fun ProfileRow(
+internal fun ProfileRow(
     profile: InputRemapRepository.ProfileSummary,
     selected: Boolean,
     onUse: () -> Unit,
@@ -495,40 +568,101 @@ private fun ProfileRow(
     // 出现两个无法区分的条目。用户改过名的方案原样显示（见 isLegacyMain 的判定）
     val displayName = profileDisplayName(profile)
     Column(Modifier.fillMaxWidth()) {
+        // 选中指示过渡：「使用中」摘要的出现 / 消失与重命名后的标题都走模糊替换，行高随之弹簧过渡
+        // （「普通」档瞬时替换，与原版一致）
+        BlurCrossfade(
+            targetState = displayName to selected,
+            modifier = Modifier.fillMaxWidth(),
+            label = "profileHeader",
+        ) { (name, inUse) ->
         ArrowPreference(
-            title = displayName,
-            summary = if (selected) stringResource(R.string.input_settings_profile_in_use) else null,
+            title = name,
+            summary = if (inUse) stringResource(R.string.input_settings_profile_in_use) else null,
             onClick = onEdit,
         )
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-            if (!selected) {
-                Box(Modifier.weight(1f)) {
-                    NoRippleTextButton(text = stringResource(R.string.input_settings_profile_use), onClick = onUse)
-                }
+        }
+        // 「使用」按钮随选中态出现 / 消失时，整排动作按钮重新排布：模糊替换而不是瞬间挤位
+        BlurCrossfade(
+            targetState = selected,
+            modifier = Modifier.fillMaxWidth(),
+            label = "profileActions",
+        ) { inUse ->
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            if (!inUse) {
+                NoRippleTextButton(text = stringResource(R.string.input_settings_profile_use), onClick = onUse)
             }
             if (onRename != null) {
-                Box(Modifier.weight(1f)) {
-                    NoRippleTextButton(text = stringResource(R.string.input_settings_profile_rename), onClick = onRename)
-                }
+                NoRippleTextButton(text = stringResource(R.string.input_settings_profile_rename), onClick = onRename)
             }
-            Box(Modifier.weight(1f)) {
-                NoRippleTextButton(text = stringResource(R.string.input_settings_profile_copy), onClick = onCopy)
-            }
-            Box(Modifier.weight(1f)) {
-                NoRippleTextButton(text = stringResource(R.string.input_settings_profile_export), onClick = onExport)
-            }
+            NoRippleTextButton(text = stringResource(R.string.input_settings_profile_copy), onClick = onCopy)
+            NoRippleTextButton(text = stringResource(R.string.input_settings_profile_export), onClick = onExport)
             if (onDelete != null) {
-                Box(Modifier.weight(1f)) {
-                    NoRippleTextButton(
-                        text = stringResource(R.string.input_settings_profile_delete),
-                        // 删除是破坏性动作：语义色取 colorScheme.error（AGENTS.md 3.3）
-                        contentColor = MaterialTheme.colorScheme.error,
-                        onClick = onDelete,
-                    )
-                }
+                NoRippleTextButton(
+                    text = stringResource(R.string.input_settings_profile_delete),
+                    // 删除是破坏性动作：语义色取 colorScheme.error（AGENTS.md 3.3）
+                    contentColor = MaterialTheme.colorScheme.error,
+                    onClick = onDelete,
+                )
             }
         }
+        }
     }
+}
+
+/**
+ * 方案行的增删动效（仅「增强」档；「普通」档直接显示 [content]，与原版一致）：
+ * 新增的方案（[fresh]）从 0 高度弹簧展开、由糊变清；被删除的方案（[exiting]）原路收起，
+ * 收起完成且已不在列表（[inList] = false）时回调 [onExited] 真正移除。被打断（删除失败）时从当前高度原路展开回来。
+ */
+@Composable
+private fun ProfileRowMotion(
+    fresh: Boolean,
+    exiting: Boolean,
+    inList: Boolean,
+    onExited: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    if (!MotionMode.enhanced) {
+        content()
+        return
+    }
+    // 只在首次组合时决定起点：新增行从隐藏开始展开，其余行直接以原样显示
+    val rowState = remember { MutableTransitionState(!fresh) }
+    val currentInList by rememberUpdatedState(inList)
+    val currentOnExited by rememberUpdatedState(onExited)
+    if (exiting) {
+        LaunchedEffect(rowState) {
+            // 收起播完、且删除已落盘（列表里没有它）才移除暂留行：写盘慢于动画时保持收起态等待
+            snapshotFlow { rowState.isIdle && !rowState.currentState && !currentInList }.first { it }
+            currentOnExited()
+        }
+    }
+    ExpandSectionVisibility(
+        visible = !exiting,
+        visibleState = rowState,
+        label = "profileRow",
+    ) {
+        content()
+    }
+}
+
+/** 把退场中的已删除方案按删除前的位置插回列表（已重新出现在列表里的不重复插入）。 */
+private fun withExitingProfiles(
+    profiles: List<InputRemapRepository.ProfileSummary>,
+    exiting: Map<String, IndexedValue<InputRemapRepository.ProfileSummary>>,
+): List<InputRemapRepository.ProfileSummary> {
+    if (exiting.isEmpty()) return profiles
+    val result = profiles.toMutableList()
+    exiting.values.sortedBy { it.index }.forEach { ghost ->
+        if (result.none { it.id == ghost.value.id }) {
+            result.add(ghost.index.coerceIn(0, result.size), ghost.value)
+        }
+    }
+    return result
 }
 
 /**
@@ -567,15 +701,20 @@ private fun ProfileNameDialog(
                     AppSearchField(
                         query = value,
                         onQueryChange = { value = it },
+                        onSearch = { onConfirm(value) },
                         leadingIcon = painterResource(R.drawable.ic_sheet_rename),
                         iconContentDescription = title,
+                        imeAction = ImeAction.Done,
                         textStyle = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
                         text = stringResource(R.string.input_settings_profile_name_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier.padding(top = 8.dp),
+                        // 弹窗编排：输入框先到、说明文字随后轻轻升起（只改图层，停稳后与原样一致）
+                        modifier = Modifier
+                            .staggeredEntrance(2, distance = 10.dp, stepMillis = 45L)
+                            .padding(top = 8.dp),
                     )
                 }
             }
@@ -594,5 +733,5 @@ private fun ProfileNameDialog(
 private const val MAX_IMPORT_CHARS = 512 * 1024
 
 private fun toast(context: Context, messageRes: Int) {
-    Toast.makeText(context, context.getString(messageRes), Toast.LENGTH_SHORT).show()
+    AppNotice.makeText(context, messageRes, Toast.LENGTH_SHORT).show()
 }
