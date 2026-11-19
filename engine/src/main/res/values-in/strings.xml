@@ -151,5 +151,5 @@
     <string name="engine_cmvs_audio_failed">Inisialisasi audio CMVS gagal</string>
     <string name="engine_cmvs_font_index_title">Indeks koleksi font</string>
     <string name="engine_cmvs_font_index_message">Untuk font biasa isi 0</string>
-    <string name="engine_systemnnn_host_ext_unresolved">Tidak dapat menentukan nomor awal penyimpanan EXE untuk game ini, peluncuran dihentikan. Klik &quot;Analisis dan buat konfigurasi&quot; di pengaturan mesin game tunggal. Jika masih menampilkan &quot;Parsing gagal&quot;, format tulisan EXE saat ini belum diketahui.</string>
+    <string name="engine_systemnnn_host_ext_unresolved">Tidak dapat menentukan nomor awal penyimpanan EXE untuk game ini, peluncuran dihentikan. Klik \"Analisis dan buat konfigurasi\" di pengaturan mesin game tunggal. Jika masih menampilkan \"Parsing gagal\", format tulisan EXE saat ini belum diketahui.</string>
 </resources>

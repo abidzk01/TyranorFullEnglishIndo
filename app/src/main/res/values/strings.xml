@@ -1321,7 +1321,7 @@
     <string name="engine_desc_pc">PC game</string>
     <string name="engine_desc_psp">PSP</string>
     <string name="engine_desc_reallive">RealLive engine</string>
-    <string name="engine_desc_renpy">Ren&apos;Py engine</string>
+    <string name="engine_desc_renpy">Ren\'Py engine</string>
     <string name="engine_desc_rpg_mv_mz">RPG Maker MV/MZ</string>
     <string name="engine_desc_rpgmaker">RPG Maker engine</string>
     <string name="engine_desc_siglus">Siglus engine</string>

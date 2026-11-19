@@ -1299,7 +1299,7 @@
     <string name="engine_settings_systemnnn_layout_ext_block">%1$d / %2$s</string>
     <string name="engine_settings_systemnnn_layout_ext_length">%1$d bytes</string>
     <string name="engine_settings_systemnnn_layout_ext_length_unknown">Tidak diketahui</string>
-    <string name="engine_settings_systemnnn_layout_ext_separator">&quot;, &quot;</string>
+    <string name="engine_settings_systemnnn_layout_ext_separator">\", \"</string>
     <string name="engine_settings_systemnnn_layout_ext_refresh">Buat ulang konfigurasi untuk melihat ukuran setiap blok.</string>
     <string name="engine_settings_systemnnn_layout_ext_none">Tidak ada</string>
     <string name="engine_settings_systemnnn_layout_ext_unknown">Analisis gagal</string>
