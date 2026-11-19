@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""扫描硬编码的界面文案（app 与 engine 两个模块）。
+"""Scan hardcoded UI strings (app and engine modules).
 
-三条规则：
+Three rules:
 
-1. 三语言 `strings.xml` 和 SystemNNN 宿主资源的键必须齐平；
-2. Kotlin 与 SystemNNN Java 的 CJK 字面量限于注明的游戏匹配键和诊断基线；
-3. drawable / XML 资源不得出现主题色（由各自模块的规范约束，此处不覆盖）。
+1. Four-language `strings.xml` and SystemNNN host resources must have matching keys;
+2. Kotlin and SystemNNN Java CJK literals limited to registered game match keys and diagnostic baselines;
+3. drawable / XML resources must not contain theme colors (scoped by respective module specs, not covered here).
 
-engine 模块的扫描范围与边界：
+Engine module scan scope and boundaries:
 
-- `engine/src/main/res/values{,-en,-ja}/strings.xml`：参与键齐平校验；
+- `engine/src/main/res/values{,-in,-ja,-zh}/strings.xml`: participate in key parity check;
 - `engine/src/main/java/**/*.kt`：参与 CJK 字面量扫描；
 - `engine/src/main/java/com/tyranor/runtime/systemnnn/*.java`：扫描字符串与文本块；
 - `engine/src/main/assets/**/*.js`：**不在扫描范围**。原因是这些脚本随游戏页面注入、不参与
@@ -31,8 +31,9 @@ MODULES = [
         ROOT / "app" / "src" / "main" / "java",
         [
             ROOT / "app" / "src" / "main" / "res" / "values" / "strings.xml",
+            ROOT / "app" / "src" / "main" / "res" / "values-in" / "strings.xml",
             ROOT / "app" / "src" / "main" / "res" / "values-ja" / "strings.xml",
-            ROOT / "app" / "src" / "main" / "res" / "values-en" / "strings.xml",
+            ROOT / "app" / "src" / "main" / "res" / "values-zh" / "strings.xml",
         ],
     ),
     (
@@ -40,8 +41,9 @@ MODULES = [
         ROOT / "engine" / "src" / "main" / "java",
         [
             ROOT / "engine" / "src" / "main" / "res" / "values" / "strings.xml",
+            ROOT / "engine" / "src" / "main" / "res" / "values-in" / "strings.xml",
             ROOT / "engine" / "src" / "main" / "res" / "values-ja" / "strings.xml",
-            ROOT / "engine" / "src" / "main" / "res" / "values-en" / "strings.xml",
+            ROOT / "engine" / "src" / "main" / "res" / "values-zh" / "strings.xml",
         ],
     ),
 ]
@@ -326,7 +328,7 @@ def main() -> int:
         errors += check_resource_parity(name, string_files)
         errors += check_cjk_literals(name, java_root.rglob("*.kt"), LITERAL_ALLOWLIST)
     for filename in ("systemnnn_controls.xml", "systemnnn_host.xml"):
-        files = [ENGINE_RES / directory / filename for directory in ("values", "values-en", "values-ja")]
+        files = [ENGINE_RES / directory / filename for directory in ("values", "values-in", "values-ja", "values-zh")]
         errors += check_resource_parity("SystemNNN", files)
     errors += check_java_cjk_literals(SYSTEMNNN_JAVA.glob("*.java"), exact_baseline=True)
     if errors:
